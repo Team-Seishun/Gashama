@@ -1,0 +1,26 @@
+name: "✨ 機能追加・改善"
+description: "新しい機能の提案や改善案"
+title: "[FEATURE]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 実装したい機能の概要
+      placeholder: 何をしたいか簡潔に教えてください
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 背景・目的
+      description: FigmaのURLなどもこちらへ）
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考リンク
+      description: 参考にした記事・ライブラリ・デザイン例など
