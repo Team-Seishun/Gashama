@@ -1,0 +1,45 @@
+name: PR Approval Check
+
+on:
+  # PRが作成・更新された時と、レビューが送信（Submit）/却下（Dismiss）された時に起動
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+jobs:
+  check-approvals:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read  # PRのレビュー状態を読み取るために必須
+
+    steps:
+      - name: Check PR Approvals
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: reviews } = await github.rest.pullRequests.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+
+            // ユーザーごとの最新のレビュー状態を抽出（古いレビューは上書き）
+            const latestReviews = {};
+            for (const review of reviews) {
+              if (review.state === 'COMMENTED') continue; // コメントは無視
+              latestReviews[review.user.login] = review.state;
+            }
+
+            // 'APPROVED'（承認）の数をカウント
+            const approvalCount = Object.values(latestReviews).filter(state => state === 'APPROVED').length;
+            console.log(`現在の有効な承認数: ${approvalCount}`);
+
+            // 必要な承認数（ここでは1つ以上）
+            const requiredApprovals = 1;
+
+            if (approvalCount < requiredApprovals) {
+              core.setFailed(`エラー: マージには最低 ${requiredApprovals} 人の承認（Approve）が必要です。`);
+            } else {
+              console.log("必要な承認数を満たしています！");
+            }
