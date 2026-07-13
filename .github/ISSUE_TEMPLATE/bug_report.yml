@@ -1,4 +1,4 @@
-name: "⚠️ 不具合・バグ報告"
+name: "bug report"
 description: "アプリの動作が期待通りでない場合はこちらから報告してください"
 labels: ["bug"]
 body:
