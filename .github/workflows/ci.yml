@@ -1,0 +1,29 @@
+name: CI (Lint & Test)
+
+# 実行されるタイミング：mainブランチに向けてPRが作成・更新されたとき
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest # 実行環境（仮想サーバー）
+    
+    steps:
+      - name: リポジトリのコードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.jsのセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x # 開発環境に合わせて変更してください（18.xなど）
+          cache: 'npm'       # yarnを使っている場合は 'yarn' に変更
+
+      - name: パッケージのインストール
+        run: npm ci          # npm installより厳密でCI向けのコマンド
+
+      - name: Lint（コード整形チェック）の実行
+        run: npm run lint
+
+      - name: テストの実行
+        run: npm run test
