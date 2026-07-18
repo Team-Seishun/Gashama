@@ -10,13 +10,15 @@ export default function LoginScreen() {
   const router = useRouter();
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    const normalizedEmail = email.trim();
+
+    if (!normalizedEmail || !password) {
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください');
       return;
     }
 
     setLoading(true);
-    const { error } = await authApi.signInWithEmail({ email, password });
+    const { error } = await authApi.signInWithEmail({ email: normalizedEmail, password });
 
     if (error) {
       Alert.alert('ログイン失敗', error.message);
