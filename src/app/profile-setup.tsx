@@ -1,6 +1,7 @@
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
 import { PROFILE_ICON_OPTIONS, getProfileIconSource } from '@/features/profile/profile-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -20,6 +21,19 @@ export default function ProfileSetupScreen() {
   const [nickname, setNickname] = useState('');
   const [selectedIconKey, setSelectedIconKey] = useState(PROFILE_ICON_OPTIONS[0].key);
   const [loading, setLoading] = useState(false);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled && result.assets[0].uri) {
+      setSelectedIconKey(result.assets[0].uri);
+    }
+  };
 
   useEffect(() => {
     if (initialized && !session) {
@@ -41,10 +55,25 @@ export default function ProfileSetupScreen() {
     }
 
     setLoading(true);
+
+    let finalIconImage = selectedIconKey;
+    if (selectedIconKey.startsWith('file://')) {
+      const { publicUrl, error: uploadError } = await profileApi.uploadProfileIcon(session.user.id, selectedIconKey);
+      
+      if (uploadError) {
+        setLoading(false);
+        Alert.alert('画像アップロード失敗', uploadError.message);
+        return;
+      }
+      if (publicUrl) {
+        finalIconImage = publicUrl;
+      }
+    }
+
     const { error } = await profileApi.saveProfile({
       userId: session.user.id,
       nickname: trimmedNickname,
-      iconImage: selectedIconKey,
+      iconImage: finalIconImage,
     });
 
     setLoading(false);
@@ -103,6 +132,22 @@ export default function ProfileSetupScreen() {
                 </Pressable>
               );
             })}
+            
+            <Pressable
+              onPress={pickImage}
+              style={[
+                styles.iconButton,
+                selectedIconKey.startsWith('file://') && styles.iconButtonSelected,
+              ]}>
+              {selectedIconKey.startsWith('file://') ? (
+                <Image source={{ uri: selectedIconKey }} style={styles.iconImage} />
+              ) : (
+                <View style={[styles.iconImage, styles.uploadPlaceholder]}>
+                  <Text style={styles.uploadPlus}>+</Text>
+                </View>
+              )}
+              <Text style={styles.iconLabel}>アルバムから</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -235,5 +280,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  uploadPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#cbd5e1',
+  },
+  uploadPlus: {
+    fontSize: 24,
+    color: '#94a3b8',
+    fontWeight: '300',
   },
 });

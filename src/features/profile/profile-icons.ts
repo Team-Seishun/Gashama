@@ -30,5 +30,8 @@ export const PROFILE_ICON_OPTIONS: ProfileIconOption[] = [
 ];
 
 export const getProfileIconSource = (key: string): ImageSourcePropType => {
+  if (key.startsWith('data:image/') || key.startsWith('http') || key.startsWith('file://')) {
+    return { uri: key };
+  }
   return PROFILE_ICON_OPTIONS.find((option) => option.key === key)?.source ?? PROFILE_ICON_OPTIONS[0].source;
 };

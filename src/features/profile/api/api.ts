@@ -18,4 +18,31 @@ export const profileApi = {
       updated_at: new Date().toISOString(),
     });
   },
+  uploadProfileIcon: async (userId: string, imageUri: string) => {
+    try {
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      const fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, blob, {
+          contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+          upsert: true,
+        });
+
+      if (error) {
+        return { publicUrl: null, error };
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return { publicUrl: urlData.publicUrl, error: null };
+    } catch (error: any) {
+      return { publicUrl: null, error };
+    }
+  },
 };
