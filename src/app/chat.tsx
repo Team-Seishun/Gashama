@@ -2,19 +2,19 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 
-export default function MapScreen() {
+export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('MapScreen: mounted / focused');
+      console.log('ChatScreen: mounted / focused');
       return () => {
-        console.log('MapScreen: unmounted / unfocused');
+        console.log('ChatScreen: unmounted / unfocused');
       };
     }, [])
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: '#E8F5E9' }]}>
-      <Text style={styles.text}>マップ画面</Text>
+    <View style={[styles.container, { backgroundColor: '#F3E5F5' }]}>
+      <Text style={styles.text}>チャット画面</Text>
     </View>
   );
 }

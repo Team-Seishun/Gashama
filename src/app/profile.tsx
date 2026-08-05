@@ -2,19 +2,19 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 
-export default function MapScreen() {
+export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('MapScreen: mounted / focused');
+      console.log('ProfileScreen: mounted / focused');
       return () => {
-        console.log('MapScreen: unmounted / unfocused');
+        console.log('ProfileScreen: unmounted / unfocused');
       };
     }, [])
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: '#E8F5E9' }]}>
-      <Text style={styles.text}>マップ画面</Text>
+    <View style={[styles.container, { backgroundColor: '#FFF8E1' }]}>
+      <Text style={styles.text}>プロフィール画面</Text>
     </View>
   );
 }
