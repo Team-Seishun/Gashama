@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('MapScreen: mounted / focused');
+      if (__DEV__) console.log('MapScreen: mounted / focused');
       return () => {
-        console.log('MapScreen: unmounted / unfocused');
+        if (__DEV__) console.log('MapScreen: unmounted / unfocused');
       };
     }, [])
   );
