@@ -1,6 +1,7 @@
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
 import { PROFILE_ICON_OPTIONS, getProfileIconSource } from '@/features/profile/profile-icons';
+import { useProfileContext } from '@/features/profile/contexts/ProfileContext';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -14,9 +15,11 @@ import {
     TextInput,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileSetupScreen() {
   const { session, initialized } = useAuth();
+  const { setHasProfile } = useProfileContext();
   const router = useRouter();
   const [nickname, setNickname] = useState('');
   const [selectedIconKey, setSelectedIconKey] = useState(PROFILE_ICON_OPTIONS[0].key);
@@ -83,19 +86,20 @@ export default function ProfileSetupScreen() {
       return;
     }
 
+    setHasProfile(true);
     router.replace('/' as any);
   };
 
   if (!initialized || !session) {
     return (
-      <View style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0a7ea4" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>プロフィールを設定</Text>
         <Text style={styles.description}>ニックネームとアイコンを選んで、はじめてのプロフィールを作成します。</Text>
@@ -162,7 +166,7 @@ export default function ProfileSetupScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>保存して始める</Text>}
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
