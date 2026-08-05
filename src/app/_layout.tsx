@@ -7,6 +7,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
+import { ProfileContext } from '@/features/profile/contexts/ProfileContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,9 +41,10 @@ export default function TabLayout() {
       .getProfileByUserId(session.user.id)
       .then(({ data }) => {
         if (!isActive) return;
+        console.log('[Layout] Profile API returned:', data);
         setProfileState({
           checked: true,
-          hasProfile: Boolean(data && data.nickname),
+          hasProfile: Boolean(data && data.nickname && data.nickname !== '新規ユーザー'),
           sessionId: session.user.id,
         });
       })
@@ -67,15 +69,27 @@ export default function TabLayout() {
     const inAuthGroup = (segments[0] as string) === '(auth)';
     const inProfileSetup = (segments[0] as string) === 'profile-setup';
 
+    console.log('[Layout] Nav Check:', { 
+      sessionExists: !!session, 
+      hasProfile: profileState.hasProfile, 
+      inAuthGroup, 
+      inProfileSetup, 
+      segments 
+    });
+
     // Need a small timeout to let navigation state settle before replacing on iOS
     const timeoutId = setTimeout(() => {
       if (!session && !inAuthGroup) {
+        console.log('[Layout] Routing to /(auth)/login');
         router.replace('/(auth)/login' as any);
       } else if (session && !profileState.hasProfile && !inProfileSetup) {
+        console.log('[Layout] Routing to /profile-setup');
         router.replace('/profile-setup' as any);
       } else if (session && profileState.hasProfile && inProfileSetup) {
+        console.log('[Layout] Routing to /');
         router.replace('/' as any);
       } else if (session && inAuthGroup) {
+        console.log('[Layout] Routing from auth. hasProfile?', profileState.hasProfile);
         router.replace((profileState.hasProfile ? '/' : '/profile-setup') as any);
       }
     }, 0);
@@ -83,14 +97,27 @@ export default function TabLayout() {
     return () => clearTimeout(timeoutId);
   }, [session, initialized, segments, profileState, router]);
 
-  if (!initialized || (session && !profileState.checked)) {
+  const isReady = initialized && (!session || profileState.checked);
+
+  useEffect(() => {
+    if (isReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [isReady]);
+
+  if (!isReady) {
     return null;
   }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
+      <ProfileContext.Provider value={{
+        hasProfile: profileState.hasProfile,
+        setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
+      }}>
+        <AnimatedSplashOverlay />
+        {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
+      </ProfileContext.Provider>
     </ThemeProvider>
   );
 }

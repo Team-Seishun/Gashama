@@ -14,12 +14,15 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
         const definition = appTabDefinitions.find((tab) => tab.name === route.name);
         const { options } = descriptors[route.key];
 
+        // Only render tabs that are explicitly defined in appTabDefinitions
+        if (!definition) return null;
+
         const labelText =
           typeof options.tabBarLabel === 'string'
             ? options.tabBarLabel
             : options.title !== undefined
             ? options.title
-            : definition?.title ?? route.name;
+            : definition.title ?? route.name;
 
         const isFocused = state.index === index;
 
