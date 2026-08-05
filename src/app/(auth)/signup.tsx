@@ -23,9 +23,7 @@ export default function SignupScreen() {
     if (error) {
       Alert.alert('新規登録失敗', error.message);
     } else {
-      if (data.session) {
-        router.replace('/profile-setup' as any);
-      } else {
+      if (!data.session) {
         Alert.alert('確認メールを送信しました', 'メールボックスをご確認ください');
       }
     }

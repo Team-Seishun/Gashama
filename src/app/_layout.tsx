@@ -15,8 +15,7 @@ export default function TabLayout() {
   const { session, initialized } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const [profileChecked, setProfileChecked] = useState(false);
-  const [hasProfile, setHasProfile] = useState(false);
+  const [profileState, setProfileState] = useState({ checked: false, hasProfile: false, sessionId: null as string | null });
 
   useEffect(() => {
     let isActive = true;
@@ -26,30 +25,34 @@ export default function TabLayout() {
     }
 
     if (!session) {
-      setHasProfile(false);
-      setProfileChecked(true);
+      setProfileState({ checked: true, hasProfile: false, sessionId: null });
       return;
     }
 
-    setProfileChecked(false);
+    // Only fetch if we haven't checked for this specific session yet
+    if (profileState.sessionId === session.user.id && profileState.checked) {
+      return;
+    }
+
+    setProfileState(prev => ({ ...prev, checked: false, sessionId: session.user.id }));
 
     profileApi
       .getProfileByUserId(session.user.id)
       .then(({ data }) => {
-        if (!isActive) {
-          return;
-        }
-
-        setHasProfile(Boolean(data));
-        setProfileChecked(true);
+        if (!isActive) return;
+        setProfileState({
+          checked: true,
+          hasProfile: Boolean(data && data.nickname),
+          sessionId: session.user.id,
+        });
       })
       .catch(() => {
-        if (!isActive) {
-          return;
-        }
-
-        setHasProfile(false);
-        setProfileChecked(true);
+        if (!isActive) return;
+        setProfileState({
+          checked: true,
+          hasProfile: false,
+          sessionId: session.user.id,
+        });
       });
 
     return () => {
@@ -59,30 +62,35 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (!initialized) return;
-    if (session && !profileChecked) return;
+    if (session && (!profileState.checked || profileState.sessionId !== session?.user.id)) return;
 
     const inAuthGroup = (segments[0] as string) === '(auth)';
     const inProfileSetup = (segments[0] as string) === 'profile-setup';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login' as any);
-    } else if (session && !hasProfile && !inProfileSetup) {
-      router.replace('/profile-setup' as any);
-    } else if (session && hasProfile && inProfileSetup) {
-      router.replace('/' as any);
-    } else if (session && inAuthGroup) {
-      router.replace((hasProfile ? '/' : '/profile-setup') as any);
-    }
-  }, [session, initialized, segments, profileChecked, hasProfile, router]);
+    // Need a small timeout to let navigation state settle before replacing on iOS
+    const timeoutId = setTimeout(() => {
+      if (!session && !inAuthGroup) {
+        router.replace('/(auth)/login' as any);
+      } else if (session && !profileState.hasProfile && !inProfileSetup) {
+        router.replace('/profile-setup' as any);
+      } else if (session && profileState.hasProfile && inProfileSetup) {
+        router.replace('/' as any);
+      } else if (session && inAuthGroup) {
+        router.replace((profileState.hasProfile ? '/' : '/profile-setup') as any);
+      }
+    }, 0);
 
-  if (!initialized || (session && !profileChecked)) {
+    return () => clearTimeout(timeoutId);
+  }, [session, initialized, segments, profileState, router]);
+
+  if (!initialized || (session && !profileState.checked)) {
     return null;
   }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      {!session || !hasProfile ? <Slot /> : <AppTabs />}
+      {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
     </ThemeProvider>
   );
 }
