@@ -43,3 +43,4 @@ example
 /ios
 /android
 .env
+*.zip
