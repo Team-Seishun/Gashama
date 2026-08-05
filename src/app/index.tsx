@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('MapScreen: mounted / focused');
+      if (__DEV__) console.log('MapScreen: focused');
       return () => {
-        if (__DEV__) console.log('MapScreen: unmounted / unfocused');
+        if (__DEV__) console.log('MapScreen: blurred');
       };
     }, [])
   );

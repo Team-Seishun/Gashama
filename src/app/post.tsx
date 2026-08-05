@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function PostScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('PostScreen: mounted / focused');
+      if (__DEV__) console.log('PostScreen: focused');
       return () => {
-        if (__DEV__) console.log('PostScreen: unmounted / unfocused');
+        if (__DEV__) console.log('PostScreen: blurred');
       };
     }, [])
   );

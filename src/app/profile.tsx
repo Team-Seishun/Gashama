@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('ProfileScreen: mounted / focused');
+      if (__DEV__) console.log('ProfileScreen: focused');
       return () => {
-        if (__DEV__) console.log('ProfileScreen: unmounted / unfocused');
+        if (__DEV__) console.log('ProfileScreen: blurred');
       };
     }, [])
   );

@@ -44,6 +44,12 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
             accessibilityState={isFocused ? { selected: true } : {}}
             accessibilityLabel={options.tabBarAccessibilityLabel}
             onPress={onPress}
+            onLongPress={() => {
+              navigation.emit({
+                type: 'tabLongPress',
+                target: route.key,
+              });
+            }}
             style={styles.tabItem}
           >
             <View style={[styles.iconContainer, isFocused && styles.activeIconContainer]}>

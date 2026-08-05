@@ -1,13 +1,9 @@
 import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import TabBar from '@/components/tab-bar';
 import { appTabDefinitions } from '@/constants/app-tabs';
-import { Colors } from '@/constants/theme';
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
   return (
     <Tabs

@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function CameraScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('CameraScreen: mounted / focused');
+      if (__DEV__) console.log('CameraScreen: focused');
       return () => {
-        if (__DEV__) console.log('CameraScreen: unmounted / unfocused');
+        if (__DEV__) console.log('CameraScreen: blurred');
       };
     }, [])
   );

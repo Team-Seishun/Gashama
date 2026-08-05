@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('ChatScreen: mounted / focused');
+      if (__DEV__) console.log('ChatScreen: focused');
       return () => {
-        if (__DEV__) console.log('ChatScreen: unmounted / unfocused');
+        if (__DEV__) console.log('ChatScreen: blurred');
       };
     }, [])
   );
