@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('ProfileScreen: mounted / focused');
+      if (__DEV__) console.log('ProfileScreen: mounted / focused');
       return () => {
-        console.log('ProfileScreen: unmounted / unfocused');
+        if (__DEV__) console.log('ProfileScreen: unmounted / unfocused');
       };
     }, [])
   );

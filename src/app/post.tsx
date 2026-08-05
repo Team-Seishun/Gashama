@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 export default function PostScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('PostScreen: mounted / focused');
+      if (__DEV__) console.log('PostScreen: mounted / focused');
       return () => {
-        console.log('PostScreen: unmounted / unfocused');
+        if (__DEV__) console.log('PostScreen: unmounted / unfocused');
       };
     }, [])
   );

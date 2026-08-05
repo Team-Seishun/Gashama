@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('ChatScreen: mounted / focused');
+      if (__DEV__) console.log('ChatScreen: mounted / focused');
       return () => {
-        console.log('ChatScreen: unmounted / unfocused');
+        if (__DEV__) console.log('ChatScreen: unmounted / unfocused');
       };
     }, [])
   );

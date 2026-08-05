@@ -5,9 +5,9 @@ import { useCallback } from 'react';
 export default function CameraScreen() {
   useFocusEffect(
     useCallback(() => {
-      console.log('CameraScreen: mounted / focused');
+      if (__DEV__) console.log('CameraScreen: mounted / focused');
       return () => {
-        console.log('CameraScreen: unmounted / unfocused');
+        if (__DEV__) console.log('CameraScreen: unmounted / unfocused');
       };
     }, [])
   );
