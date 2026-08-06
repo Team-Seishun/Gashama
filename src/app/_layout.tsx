@@ -42,7 +42,7 @@ export default function TabLayout() {
       .getProfileByUserId(session.user.id)
       .then(({ data }) => {
         if (!isActive) return;
-        console.log('[Layout] Profile API returned:', data);
+        __DEV__ && console.log('[Layout] Profile API returned:', data);
         setProfileState({
           checked: true,
           hasProfile: Boolean(data && data.nickname && data.nickname !== '新規ユーザー'),
@@ -70,7 +70,7 @@ export default function TabLayout() {
     const inAuthGroup = (segments[0] as string) === '(auth)';
     const inProfileSetup = (segments[0] as string) === 'profile-setup';
 
-    console.log('[Layout] Nav Check:', { 
+    __DEV__ && console.log('[Layout] Nav Check:', { 
       sessionExists: !!session, 
       hasProfile: profileState.hasProfile, 
       inAuthGroup, 
@@ -81,16 +81,16 @@ export default function TabLayout() {
     // Need a small timeout to let navigation state settle before replacing on iOS
     const timeoutId = setTimeout(() => {
       if (!session && !inAuthGroup) {
-        console.log('[Layout] Routing to /(auth)/login');
+        __DEV__ && console.log('[Layout] Routing to /(auth)/login');
         router.replace('/(auth)/login' as any);
       } else if (session && !profileState.hasProfile && !inProfileSetup) {
-        console.log('[Layout] Routing to /profile-setup');
+        __DEV__ && console.log('[Layout] Routing to /profile-setup');
         router.replace('/profile-setup' as any);
       } else if (session && profileState.hasProfile && inProfileSetup) {
-        console.log('[Layout] Routing to /');
+        __DEV__ && console.log('[Layout] Routing to /');
         router.replace('/' as any);
       } else if (session && inAuthGroup) {
-        console.log('[Layout] Routing from auth. hasProfile?', profileState.hasProfile);
+        __DEV__ && console.log('[Layout] Routing from auth. hasProfile?', profileState.hasProfile);
         router.replace((profileState.hasProfile ? '/' : '/profile-setup') as any);
       }
     }, 0);
