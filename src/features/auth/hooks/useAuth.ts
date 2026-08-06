@@ -7,10 +7,11 @@ export const useAuth = () => {
   const [initialized, setInitialized] = useState<boolean>(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setInitialized(true);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => setSession(session))
+      .catch(() => setSession(null))
+      .finally(() => setInitialized(true));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
