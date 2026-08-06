@@ -65,7 +65,7 @@ export default function ProfileSetupScreen() {
       
       if (uploadError) {
         setLoading(false);
-        Alert.alert('画像アップロード失敗', uploadError.message);
+        Alert.alert('画像アップロード失敗', String((uploadError as any)?.message ?? uploadError));
         return;
       }
       if (publicUrl) {
