@@ -25,7 +25,7 @@ export const profileApi = {
       const fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
       const fileName = `${userId}-${Date.now()}.${fileExt}`;
       
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('avatars')
         .upload(fileName, blob, {
           contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,

@@ -26,6 +26,7 @@ export default function TabLayout() {
     }
 
     if (!session) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileState({ checked: true, hasProfile: false, sessionId: null });
       return;
     }
@@ -60,7 +61,7 @@ export default function TabLayout() {
     return () => {
       isActive = false;
     };
-  }, [initialized, session]);
+  }, [initialized, session, profileState.checked, profileState.sessionId]);
 
   useEffect(() => {
     if (!initialized) return;
