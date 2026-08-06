@@ -62,7 +62,7 @@ export default function TabLayout() {
       isActive = false;
     };
   }, [initialized, session, profileState.checked, profileState.sessionId]);
-
+/*
   useEffect(() => {
     if (!initialized) return;
     if (session && (!profileState.checked || profileState.sessionId !== session?.user.id)) return;
@@ -97,7 +97,7 @@ export default function TabLayout() {
 
     return () => clearTimeout(timeoutId);
   }, [session, initialized, segments, profileState, router]);
-
+*/
   const isReady = initialized && (!session || profileState.checked);
 
   useEffect(() => {
