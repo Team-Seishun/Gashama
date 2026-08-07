@@ -4,8 +4,6 @@ import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, ScrollVi
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 
-const { width } = Dimensions.get('window');
-
 // ----------------------------------------------------
 // モックデータの生成
 // ----------------------------------------------------
