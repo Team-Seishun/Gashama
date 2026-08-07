@@ -7,7 +7,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <TabBar {...props} />}
+      tabBar={(props: any) => <TabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       {appTabDefinitions.map((tab) => (

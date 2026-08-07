@@ -230,13 +230,23 @@ export default function PostScreen() {
         </View>
 
         {/* リスト表示 */}
-        <FlatList
-          data={activeTab === 'trade' ? MOCK_TRADES : MOCK_INVENTORIES}
-          keyExtractor={(item) => item.id}
-          renderItem={activeTab === 'trade' ? renderTradeCard : renderInventoryCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+        {activeTab === 'trade' ? (
+          <FlatList
+            data={MOCK_TRADES}
+            keyExtractor={(item) => item.id}
+            renderItem={renderTradeCard}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
+          <FlatList
+            data={MOCK_INVENTORIES}
+            keyExtractor={(item) => item.id}
+            renderItem={renderInventoryCard}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
