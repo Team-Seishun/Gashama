@@ -23,8 +23,8 @@ type LocationData = {
 
 
 export default function MapScreen() {
+  const now = Date.now();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [selectedImageReport, setSelectedImageReport] = useState<any | null>(null);
   const [storeReports, setStoreReports] = useState<any[]>([]);
@@ -36,7 +36,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   // 現在地に戻る処理
-  const goToMyLocation = async () => {
+  const goToMyLocation = useCallback(async () => {
     if (location && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: location.coords.latitude,
@@ -67,7 +67,7 @@ export default function MapScreen() {
     } catch (error) {
       console.log('Error getting current location:', error);
     }
-  };
+  }, [location]);
   const snapPoints = useMemo(() => ['30%', '70%'], []);
 
   const navigation = useNavigation();
@@ -95,7 +95,7 @@ export default function MapScreen() {
     if (gachaponId && gashaponLocations.length > 0) {
       const fetchInStockStores = async () => {
         // 対象の商品の在庫報告がある店舗を取得
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('reports')
           .select('store_id, stock_status')
           .eq('gachapon_id', gachaponId)
@@ -140,6 +140,7 @@ export default function MapScreen() {
       
       fetchInStockStores();
     } else if (!gachaponId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFilteredLocations(null);
     }
   }, [gachaponId, gashaponLocations]);
@@ -155,7 +156,7 @@ export default function MapScreen() {
       }
     });
     return unsubscribe;
-  }, [navigation, location]);
+  }, [navigation, location, goToMyLocation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -168,7 +169,7 @@ export default function MapScreen() {
 
   useEffect(() => {
     const fetchStores = async () => {
-      const { data, error } = await supabase.from('stores').select('*');
+      const { data } = await supabase.from('stores').select('*');
       if (data) {
         const locations = data.map((store: any) => {
           let lat = 0;
@@ -200,7 +201,6 @@ export default function MapScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('位置情報へのアクセスが拒否されました');
         return;
       }
 
@@ -235,15 +235,16 @@ export default function MapScreen() {
       };
       fetchReports();
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStoreReports([]);
     }
   }, [selectedLocation]);
 
   // マーカータップ時の処理
-  const handleMarkerPress = (loc: LocationData) => {
+  function handleMarkerPress(loc: LocationData) {
     setSelectedLocation(loc);
     bottomSheetRef.current?.expand(); // シートを引き出す
-  };
+  }
 
   return (
     <View style={styles.container}>
@@ -350,7 +351,7 @@ export default function MapScreen() {
               {/* 最新レポートハイライト */}
               {storeReports.length > 0 && (() => {
                 const latestReport = storeReports[0];
-                const diff = Date.now() - new Date(latestReport.created_at).getTime();
+                const diff = now - new Date(latestReport.created_at).getTime();
                 const seconds = Math.floor(diff / 1000);
                 let timeAgo = '';
                 if (seconds < 60) {
@@ -444,7 +445,7 @@ export default function MapScreen() {
                 const title = report.gachapons?.name || '不明な商品';
                 
                 // 経過時間の計算
-                const diff = Date.now() - new Date(report.created_at).getTime();
+                const diff = now - new Date(report.created_at).getTime();
                 const minutes = Math.floor(diff / 60000);
                 let timeAgo = `${minutes}分前`;
                 if (minutes >= 60) {
@@ -583,7 +584,7 @@ export default function MapScreen() {
                 
                 <Text style={styles.modalTimeText}>
                   {selectedImageReport?.created_at ? (() => {
-                    const diff = Date.now() - new Date(selectedImageReport.created_at).getTime();
+                    const diff = now - new Date(selectedImageReport.created_at).getTime();
                     const seconds = Math.floor(diff / 1000);
                     if (seconds < 60) return `${seconds}秒前`;
                     const minutes = Math.floor(seconds / 60);
