@@ -40,7 +40,9 @@
         {
           "photosPermission": "プロフィールアイコンを設定するために写真ライブラリへのアクセスを許可してください。"
         }
-      ]
+      ],
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
