@@ -10,7 +10,8 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   SafeAreaView,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -27,6 +28,10 @@ export default function ChatRoomScreen() {
   const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
   const [rating, setRating] = useState<'good' | 'bad' | null>(null);
   const [reviewComment, setReviewComment] = useState('');
+  
+  // ローディング状態 (モック用)
+  const [isApproving, setIsApproving] = useState(false);
+  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -67,10 +72,21 @@ export default function ChatRoomScreen() {
                 
                 <View style={styles.actionButtonsRow}>
                   <TouchableOpacity 
-                    style={[styles.actionButton, styles.approveButton]}
-                    onPress={() => setIsApproved(true)}
+                    style={[styles.actionButton, styles.approveButton, isApproving && styles.approveButtonDisabled]}
+                    disabled={isApproving}
+                    onPress={() => {
+                      setIsApproving(true);
+                      setTimeout(() => {
+                        setIsApproving(false);
+                        setIsApproved(true);
+                      }, 1000); // 1秒間の疑似ローディング
+                    }}
                   >
-                    <Text style={styles.approveButtonText}>承認する</Text>
+                    {isApproving ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.approveButtonText}>承認する</Text>
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.actionButton, styles.rejectButton]}>
                     <Text style={styles.rejectButtonText}>拒否する</Text>
@@ -260,14 +276,25 @@ export default function ChatRoomScreen() {
           {/* 送信ボタン */}
           <View style={styles.modalFooter}>
             <TouchableOpacity 
-              style={styles.submitReviewButton}
+              style={[styles.submitReviewButton, isReviewSubmitting && styles.submitReviewButtonDisabled]}
+              disabled={isReviewSubmitting}
               onPress={() => {
                 // 送信処理（モック）
-                setIsReviewModalVisible(false);
+                setIsReviewSubmitting(true);
+                setTimeout(() => {
+                  setIsReviewSubmitting(false);
+                  setIsReviewModalVisible(false);
+                }, 1000);
               }}
             >
-              <Text style={styles.submitReviewButtonText}>評価を送信する</Text>
-              <Ionicons name="send" size={16} color="#fff" style={{ marginLeft: 8 }} />
+              {isReviewSubmitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.submitReviewButtonText}>評価を送信する</Text>
+                  <Ionicons name="send" size={16} color="#fff" style={{ marginLeft: 8 }} />
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -377,6 +404,9 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     backgroundColor: '#FF7A00',
+  },
+  approveButtonDisabled: {
+    backgroundColor: '#FFB870',
   },
   approveButtonText: {
     color: '#fff',
@@ -680,6 +710,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  submitReviewButtonDisabled: {
+    backgroundColor: '#A1887F',
   },
   submitReviewButtonText: {
     color: '#fff',
