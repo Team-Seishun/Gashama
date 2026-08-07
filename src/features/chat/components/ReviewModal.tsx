@@ -1,15 +1,18 @@
 import { Modal, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
+import { Image } from 'expo-image';
+import { Profile } from '../types';
 
 type ReviewModalProps = {
   isVisible: boolean;
   onClose: () => void;
   onSubmit: (rating: 'good' | 'bad' | null, comment: string) => void;
   isSubmitting: boolean;
+  partner: Profile | null;
 };
 
-export function ReviewModal({ isVisible, onClose, onSubmit, isSubmitting }: ReviewModalProps) {
+export function ReviewModal({ isVisible, onClose, onSubmit, isSubmitting, partner }: ReviewModalProps) {
   const [rating, setRating] = useState<'good' | 'bad' | null>(null);
   const [reviewComment, setReviewComment] = useState('');
 
@@ -26,21 +29,26 @@ export function ReviewModal({ isVisible, onClose, onSubmit, isSubmitting }: Revi
             <Ionicons name="close" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.modalHeaderTitle}>評価する</Text>
-          <View style={{ width: 24 }} /> {/* バランスを取るためのダミー */}
+          <View style={{ width: 24 }} />
         </View>
         
         <ScrollView contentContainerStyle={styles.modalContent}>
           {/* ユーザー情報 */}
           <View style={styles.modalUserSection}>
             <View style={styles.modalAvatarContainer}>
-              <View style={styles.modalAvatarPlaceholder}>
-                <Ionicons name="person" size={40} color="#007AFF" />
-              </View>
+              {partner?.icon_image && partner.icon_image.startsWith('http') ? (
+                <Image source={{ uri: partner.icon_image }} style={styles.modalAvatarPlaceholder} contentFit="cover" />
+              ) : (
+                <View style={styles.modalAvatarPlaceholder}>
+                  <Ionicons name="person" size={40} color="#007AFF" />
+                </View>
+              )}
               <View style={styles.modalAvatarBadge}>
                 <Ionicons name="checkmark" size={12} color="#fff" />
               </View>
             </View>
-            <Text style={styles.modalUserName}>GachaFan_99</Text>
+            <Text style={styles.modalUserName}>{partner?.nickname || '名無しさん'}</Text>
+            <Text style={styles.modalUserId}>ID: {partner?.id || '---'}</Text>
             <Text style={styles.modalGreeting}>
               トレードお疲れ様でした！{'\n'}相手の評価をお願いします。
             </Text>
@@ -176,6 +184,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
+    marginBottom: 4,
+  },
+  modalUserId: {
+    fontSize: 12,
+    color: '#999',
     marginBottom: 8,
   },
   modalGreeting: {

@@ -21,6 +21,7 @@ export type ChatMessage = {
   room_id: string;
   sender_id: string;
   message: string;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
 };

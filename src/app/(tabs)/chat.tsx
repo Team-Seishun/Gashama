@@ -93,29 +93,44 @@ export default function ChatListScreen() {
     return `${Math.floor(hours / 24)}日前`;
   };
 
-  const renderItem = ({ item }: { item: ChatRoomWithPartner }) => (
-    <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item.id)}>
-      <View style={styles.avatarContainer}>
-        {item.partner?.icon_image && item.partner.icon_image.startsWith('http') ? (
-          <Image source={{ uri: item.partner.icon_image }} style={styles.avatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: '#E1F5FE' }]}>
-            <Ionicons name="person" size={24} color="#007AFF" />
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.chatInfo}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.userName}>{item.partner?.nickname || '名無しさん'}</Text>
-          <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
+  const renderItem = ({ item }: { item: ChatRoomWithPartner }) => {
+    const isSystemMessage = item.latestMessage?.startsWith('【システムメッセージ】');
+    const displayMessage = isSystemMessage 
+      ? item.latestMessage?.replace('【システムメッセージ】\n', '') 
+      : item.latestMessage;
+
+    return (
+      <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item.id)}>
+        <View style={styles.avatarContainer}>
+          {item.partner?.icon_image && item.partner.icon_image.startsWith('http') ? (
+            <Image source={{ uri: item.partner.icon_image }} style={styles.avatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: '#E1F5FE' }]}>
+              <Ionicons name="person" size={24} color="#007AFF" />
+            </View>
+          )}
         </View>
-        <Text style={styles.messageText} numberOfLines={1}>
-          {item.latestMessage}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+        
+        <View style={styles.chatInfo}>
+          <View style={styles.chatHeader}>
+            <Text style={styles.userName}>{item.partner?.nickname || '名無しさん'}</Text>
+            <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {isSystemMessage && (
+              <Ionicons name="information-circle" size={14} color="#999" style={{ marginRight: 4 }} />
+            )}
+            <Text 
+              style={[styles.messageText, isSystemMessage && { color: '#999', fontStyle: 'italic', flex: 1 }]} 
+              numberOfLines={1}
+            >
+              {displayMessage}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>

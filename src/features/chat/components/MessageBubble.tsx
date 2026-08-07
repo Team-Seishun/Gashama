@@ -1,14 +1,16 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 
 type MessageBubbleProps = {
   text: string;
   time: string;
   isOwnMessage: boolean;
   isSystemMessage?: boolean;
+  imageUrl?: string | null;
 };
 
-export function MessageBubble({ text, time, isOwnMessage, isSystemMessage }: MessageBubbleProps) {
+export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, imageUrl }: MessageBubbleProps) {
   if (isSystemMessage) {
     const displayText = text.replace('【システムメッセージ】\n', '');
     return (
@@ -26,10 +28,17 @@ export function MessageBubble({ text, time, isOwnMessage, isSystemMessage }: Mes
     return (
       <View style={[styles.messageRow, styles.messageRowRight]}>
         <Text style={[styles.timeText, { marginRight: 8 }]}>{time}</Text>
-        <View style={styles.messageBubbleRight}>
-          <Text style={styles.messageTextRight}>
-            {text}
-          </Text>
+        <View style={[styles.messageBubbleRight, imageUrl ? { backgroundColor: 'transparent', padding: 0 } : null]}>
+          {imageUrl && (
+            <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+          )}
+          {text ? (
+            <View style={imageUrl ? [styles.messageBubbleRight, { marginTop: 4 }] : null}>
+              <Text style={styles.messageTextRight}>
+                {text}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
     );
@@ -40,10 +49,17 @@ export function MessageBubble({ text, time, isOwnMessage, isSystemMessage }: Mes
       <View style={[styles.avatarPlaceholder, { backgroundColor: '#E1F5FE' }]}>
         <Ionicons name="person" size={16} color="#007AFF" />
       </View>
-      <View style={styles.messageBubbleLeft}>
-        <Text style={styles.messageTextLeft}>
-          {text}
-        </Text>
+      <View style={[styles.messageBubbleLeft, imageUrl ? { backgroundColor: 'transparent', padding: 0 } : null]}>
+        {imageUrl && (
+          <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+        )}
+        {text ? (
+          <View style={imageUrl ? [styles.messageBubbleLeft, { marginTop: 4 }] : null}>
+            <Text style={styles.messageTextLeft}>
+              {text}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <Text style={styles.timeText}>{time}</Text>
     </View>
@@ -94,6 +110,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
     lineHeight: 20,
+  },
+  messageImage: {
+    width: 220,
+    height: 300,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
   },
   timeText: {
     fontSize: 11,

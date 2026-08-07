@@ -1,5 +1,6 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect, useRef } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import { 
   StyleSheet, 
   Text, 
@@ -27,6 +28,7 @@ export default function ChatRoomScreen() {
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partner, setPartner] = useState<Profile | null>(null);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [inputText, setInputText] = useState('');
   
@@ -61,6 +63,13 @@ export default function ChatRoomScreen() {
           .single();
           
         if (partnerData) setPartner(partnerData);
+        
+        const { data: myData } = await supabase
+          .from('profiles')
+          .select('id, nickname, icon_image')
+          .eq('id', session!.user.id)
+          .single();
+        if (myData) setMyProfile(myData);
         
         const { data: messagesData, error: messagesError } = await supabase
           .from('chat_messages')
@@ -129,6 +138,58 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    if (!session?.user.id || !roomId) return;
+    
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setIsSending(true);
+        const asset = result.assets[0];
+        
+        const ext = asset.uri.split('.').pop() || 'jpg';
+        const fileName = `${roomId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('chat-images')
+          .upload(fileName, blob, {
+            contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+            upsert: false,
+          });
+          
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('chat-images')
+          .getPublicUrl(uploadData.path);
+
+        const { error: insertError } = await supabase
+          .from('chat_messages')
+          .insert({
+            room_id: roomId,
+            sender_id: session.user.id,
+            message: '', // テキストはなし
+            image_url: publicUrl
+          });
+          
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error('Error picking/uploading image:', error);
+      alert('画像の送信に失敗しました');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleComplete = async (rating: 'good' | 'bad' | null, comment: string) => {
     setIsReviewSubmitting(true);
     try {
@@ -136,6 +197,10 @@ export default function ChatRoomScreen() {
       
       const isUser1 = chatRoom?.user_1_id === session.user.id;
       const updateData = isUser1 ? { user_1_completed: true } : { user_2_completed: true };
+      
+      // 双方が完了状態になるかを判定
+      const isPartnerCompleted = isUser1 ? chatRoom?.user_2_completed : chatRoom?.user_1_completed;
+      const isBothCompleted = isPartnerCompleted === true;
       
       // 1. チャットルームの完了フラグを更新
       const { error } = await supabase
@@ -145,25 +210,48 @@ export default function ChatRoomScreen() {
         
       if (error) throw error;
       
-      // 2. 評価データの保存 (reviewsテーブル)
+      // 2. 相手のプロフィール（評価スコア）を更新する
       const partnerId = chatRoom?.user_1_id === session.user.id ? chatRoom?.user_2_id : chatRoom?.user_1_id;
       if (rating && partnerId) {
-        const { error: reviewError } = await supabase
-          .from('reviews')
-          .insert({
-            reviewer_id: session.user.id,
-            reviewee_id: partnerId,
-            trade_id: chatRoom?.trade_id, // もしスキーマに存在しない場合はエラーがログに出ますが進行は止めません
-            rating: rating,
-            comment: comment
-          });
-        if (reviewError) {
-          console.error('Error saving review:', reviewError);
+        // 現在の相手の星と取引回数を取得
+        const { data: partnerProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('evaluated_star, trade_history')
+          .eq('id', partnerId)
+          .single();
+
+        if (partnerProfile && !fetchError) {
+          // 値がない場合の初期値を設定 (星3.0, 回数0)
+          const currentStar = partnerProfile.evaluated_star ?? 3.0;
+          const currentHistory = partnerProfile.trade_history ?? 0;
+          
+          // 今回の評価スコア (good = 5.0, bad = 1.0 とする)
+          const newScore = rating === 'good' ? 5.0 : 1.0;
+          
+          // 新しい星の平均値を計算
+          const nextHistory = currentHistory + 1;
+          const nextStar = ((currentStar * currentHistory) + newScore) / nextHistory;
+          
+          // 小数点第1位までに丸める (例: 4.2)
+          const roundedStar = Math.round(nextStar * 10) / 10;
+
+          const { error: updateProfileError } = await supabase
+            .from('profiles')
+            .update({
+              evaluated_star: roundedStar,
+              trade_history: nextHistory
+            })
+            .eq('id', partnerId);
+            
+          if (updateProfileError) {
+            console.error('Error updating partner profile:', updateProfileError);
+          }
         }
       }
 
-      // 3. 自動完了メッセージの送信
-      const autoMessage = `【システムメッセージ】\n交換完了処理を行いました。\n\n[評価]: ${rating === 'good' ? '良い' : rating === 'bad' ? '悪い' : 'なし'}\n[コメント]: ${comment || 'なし'}`;
+      // 3. 自動完了メッセージの送信 (誰が評価したかを記載)
+      const myName = myProfile?.nickname || '名無しさん';
+      const autoMessage = `【システムメッセージ】\n${myName}さんが交換完了処理を行いました。\n\n[評価]: ${rating === 'good' ? '良い' : rating === 'bad' ? '悪い' : 'なし'}\n[コメント]: ${comment || 'なし'}`;
       const { error: messageError } = await supabase
         .from('chat_messages')
         .insert({
@@ -173,6 +261,18 @@ export default function ChatRoomScreen() {
         });
       if (messageError) {
         console.error('Error sending auto message:', messageError);
+      }
+
+      // 4. 双方が完了した場合、追加でシステムメッセージを送信
+      if (isBothCompleted) {
+        const bothCompletedMessage = `【システムメッセージ】\n双方が交換完了手続きを終えました！\nこれにてこのチャットルームでの取引は終了となります。\nお疲れ様でした！`;
+        await supabase
+          .from('chat_messages')
+          .insert({
+            room_id: roomId,
+            sender_id: session.user.id,
+            message: bothCompletedMessage
+          });
       }
       
       // 更新後の状態を反映
@@ -251,6 +351,7 @@ export default function ChatRoomScreen() {
               time={formatTime(msg.created_at)}
               isOwnMessage={msg.sender_id === session?.user.id}
               isSystemMessage={msg.message.startsWith('【システムメッセージ】')}
+              imageUrl={msg.image_url}
             />
           ))}
           {isSending && (
@@ -274,7 +375,7 @@ export default function ChatRoomScreen() {
           )}
 
           <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachButton} disabled={!isApproved}>
+            <TouchableOpacity style={styles.attachButton} disabled={!isApproved} onPress={handlePickImage}>
               <Ionicons name="add" size={24} color={isApproved ? "#666" : "#ccc"} />
             </TouchableOpacity>
             <View style={[styles.inputWrapper, !isApproved && styles.inputWrapperDisabled]}>
@@ -286,7 +387,6 @@ export default function ChatRoomScreen() {
                 onChangeText={setInputText}
                 editable={isApproved}
               />
-              <Ionicons name="happy-outline" size={24} color={isApproved ? "#ccc" : "#eee"} style={{marginRight: 10}} />
             </View>
             <TouchableOpacity 
               style={[styles.sendButton, (!isApproved || !inputText.trim()) && styles.sendButtonDisabled]} 
@@ -305,6 +405,7 @@ export default function ChatRoomScreen() {
         onClose={() => setIsReviewModalVisible(false)}
         isSubmitting={isReviewSubmitting}
         onSubmit={handleComplete}
+        partner={partner}
       />
     </SafeAreaView>
   );
