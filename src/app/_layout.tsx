@@ -1,10 +1,10 @@
-import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
 import { ProfileContext } from '@/features/profile/contexts/ProfileContext';
@@ -89,11 +89,11 @@ export default function TabLayout() {
         __DEV__ && console.log('[Layout] Routing to /profile-setup');
         router.replace('/profile-setup' as any);
       } else if (session && profileState.hasProfile && inProfileSetup) {
-        __DEV__ && console.log('[Layout] Routing to /');
-        router.replace('/' as any);
+        __DEV__ && console.log('[Layout] Routing to /(tabs)');
+        router.replace('/(tabs)' as any);
       } else if (session && inAuthGroup) {
         __DEV__ && console.log('[Layout] Routing from auth. hasProfile?', profileState.hasProfile);
-        router.replace((profileState.hasProfile ? '/' : '/profile-setup') as any);
+        router.replace((profileState.hasProfile ? '/(tabs)' : '/profile-setup') as any);
       }
     }, 0);
 
@@ -120,7 +120,7 @@ export default function TabLayout() {
           setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
         }}>
           <AnimatedSplashOverlay />
-          {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
+          <Stack screenOptions={{ headerShown: false }} />
         </ProfileContext.Provider>
       </ThemeProvider>
     </GestureHandlerRootView>
