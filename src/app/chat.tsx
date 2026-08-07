@@ -100,6 +100,9 @@ export default function ChatListScreen() {
         <FlatList
           data={MOCK_CHAT_LIST}
           keyExtractor={(item) => item.id}
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
         />
