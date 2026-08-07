@@ -14,6 +14,8 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ReviewModal } from '@/features/chat/components/ReviewModal';
+import { MessageBubble } from '@/features/chat/components/MessageBubble';
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -26,8 +28,6 @@ export default function ChatRoomScreen() {
   
   // 評価モーダルの状態
   const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
-  const [rating, setRating] = useState<'good' | 'bad' | null>(null);
-  const [reviewComment, setReviewComment] = useState('');
   
   // ローディング状態 (モック用)
   const [isApproving, setIsApproving] = useState(false);
@@ -121,40 +121,25 @@ export default function ChatRoomScreen() {
               </View>
 
               {/* メッセージ 1 (相手) */}
-              <View style={[styles.messageRow, styles.messageRowLeft]}>
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E1F5FE' }]}>
-                  <Ionicons name="person" size={16} color="#007AFF" />
-                </View>
-                <View style={styles.messageBubbleLeft}>
-                  <Text style={styles.messageTextLeft}>
-                    はじめまして！マッチングありがとうございます。ウサギの在庫あります！
-                  </Text>
-                </View>
-                <Text style={styles.timeText}>14:23</Text>
-              </View>
+              <MessageBubble 
+                text="はじめまして！マッチングありがとうございます。ウサギの在庫あります！"
+                time="14:23"
+                isOwnMessage={false}
+              />
 
               {/* メッセージ 2 (自分) */}
-              <View style={[styles.messageRow, styles.messageRowRight]}>
-                <Text style={[styles.timeText, { marginRight: 8 }]}>14:25</Text>
-                <View style={styles.messageBubbleRight}>
-                  <Text style={styles.messageTextRight}>
-                    こちらこそありがとうございます！ハチワレも未開封の状態で保管しております。交換よろしくお願いします！
-                  </Text>
-                </View>
-              </View>
+              <MessageBubble 
+                text="こちらこそありがとうございます！ハチワレも未開封の状態で保管しております。交換よろしくお願いします！"
+                time="14:25"
+                isOwnMessage={true}
+              />
 
               {/* メッセージ 3 (相手) */}
-              <View style={[styles.messageRow, styles.messageRowLeft]}>
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E1F5FE' }]}>
-                  <Ionicons name="person" size={16} color="#007AFF" />
-                </View>
-                <View style={styles.messageBubbleLeft}>
-                  <Text style={styles.messageTextLeft}>
-                    良かったです！交換方法ですが、都内での手渡しで場所の調整をさせていただけますでしょうか？
-                  </Text>
-                </View>
-                <Text style={styles.timeText}>14:28</Text>
-              </View>
+              <MessageBubble 
+                text="良かったです！交換方法ですが、都内での手渡しで場所の調整をさせていただけますでしょうか？"
+                time="14:28"
+                isOwnMessage={false}
+              />
             </>
           )}
         </ScrollView>
@@ -195,110 +180,19 @@ export default function ChatRoomScreen() {
       </KeyboardAvoidingView>
 
       {/* 評価モーダル */}
-      <Modal
-        visible={isReviewModalVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setIsReviewModalVisible(false)}
-      >
-        <SafeAreaView style={styles.modalSafeArea}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setIsReviewModalVisible(false)} style={styles.modalCloseButton}>
-              <Ionicons name="close" size={24} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.modalHeaderTitle}>評価する</Text>
-            <View style={{ width: 24 }} /> {/* バランスを取るためのダミー */}
-          </View>
-          
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            {/* ユーザー情報 */}
-            <View style={styles.modalUserSection}>
-              <View style={styles.modalAvatarContainer}>
-                <View style={styles.modalAvatarPlaceholder}>
-                  <Ionicons name="person" size={40} color="#007AFF" />
-                </View>
-                <View style={styles.modalAvatarBadge}>
-                  <Ionicons name="checkmark" size={12} color="#fff" />
-                </View>
-              </View>
-              <Text style={styles.modalUserName}>GachaFan_99</Text>
-              <Text style={styles.modalGreeting}>
-                トレードお疲れ様でした！{'\n'}相手の評価をお願いします。
-              </Text>
-            </View>
-
-            {/* 評価ボタン群 */}
-            <View style={styles.ratingButtonsContainer}>
-              <TouchableOpacity 
-                style={[styles.ratingButton, rating === 'good' && styles.ratingButtonActive]}
-                onPress={() => setRating('good')}
-              >
-                <Ionicons name="happy" size={48} color={rating === 'good' ? '#FF7A00' : '#A0A0A0'} />
-                <Text style={[styles.ratingButtonText, rating === 'good' && styles.ratingButtonTextActive]}>良かった</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.ratingButton, rating === 'bad' && styles.ratingButtonActive]}
-                onPress={() => setRating('bad')}
-              >
-                <Ionicons name="sad" size={48} color={rating === 'bad' ? '#8D6E63' : '#A0A0A0'} />
-                <Text style={[styles.ratingButtonText, rating === 'bad' && styles.ratingButtonTextActive]}>残念だった</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* コメント入力 */}
-            <View style={styles.commentSection}>
-              <View style={styles.commentHeader}>
-                <Text style={styles.commentLabel}>コメント (任意)</Text>
-                <Text style={styles.commentCounter}>{reviewComment.length}/1000</Text>
-              </View>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="取引の感想を入力してください"
-                placeholderTextColor="#999"
-                multiline
-                maxLength={1000}
-                value={reviewComment}
-                onChangeText={setReviewComment}
-                textAlignVertical="top"
-              />
-            </View>
-
-            {/* 注意事項 */}
-            <View style={styles.warningBox}>
-              <Ionicons name="information-circle" size={20} color="#D95C14" style={{ marginTop: 2, marginRight: 8 }} />
-              <Text style={styles.warningText}>
-                評価は相手のプロフィールに表示されます。丁寧なコメントを心がけましょう。一度送信した評価は変更できません。
-              </Text>
-            </View>
-          </ScrollView>
-
-          {/* 送信ボタン */}
-          <View style={styles.modalFooter}>
-            <TouchableOpacity 
-              style={[styles.submitReviewButton, isReviewSubmitting && styles.submitReviewButtonDisabled]}
-              disabled={isReviewSubmitting}
-              onPress={() => {
-                // 送信処理（モック）
-                setIsReviewSubmitting(true);
-                setTimeout(() => {
-                  setIsReviewSubmitting(false);
-                  setIsReviewModalVisible(false);
-                }, 1000);
-              }}
-            >
-              {isReviewSubmitting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.submitReviewButtonText}>評価を送信する</Text>
-                  <Ionicons name="send" size={16} color="#fff" style={{ marginLeft: 8 }} />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Modal>
+      <ReviewModal
+        isVisible={isReviewModalVisible}
+        onClose={() => setIsReviewModalVisible(false)}
+        isSubmitting={isReviewSubmitting}
+        onSubmit={(rating, comment) => {
+          // 送信処理（モック）
+          setIsReviewSubmitting(true);
+          setTimeout(() => {
+            setIsReviewSubmitting(false);
+            setIsReviewModalVisible(false);
+          }, 1000);
+        }}
+      />
 
     </SafeAreaView>
   );
@@ -446,57 +340,6 @@ const styles = StyleSheet.create({
     color: '#999',
   },
 
-  // メッセージ
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  messageRowLeft: {
-    justifyContent: 'flex-start',
-  },
-  messageRowRight: {
-    justifyContent: 'flex-end',
-  },
-  avatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  messageBubbleLeft: {
-    backgroundColor: '#F5F5F5',
-    padding: 12,
-    borderRadius: 16,
-    borderBottomLeftRadius: 4,
-    maxWidth: '70%',
-    marginRight: 8,
-  },
-  messageBubbleRight: {
-    backgroundColor: '#FF7A00',
-    padding: 12,
-    borderRadius: 16,
-    borderBottomRightRadius: 4,
-    maxWidth: '75%',
-  },
-  messageTextLeft: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
-  },
-  messageTextRight: {
-    fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
-  },
-  timeText: {
-    fontSize: 11,
-    color: '#999',
-    marginBottom: 4,
-  },
-
   // 下部エリア
   bottomArea: {
     paddingHorizontal: 16,
@@ -561,162 +404,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE5CC',
   },
 
-  // 評価モーダル
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: '#FAFAFA',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    backgroundColor: '#fff',
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalHeaderTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalContent: {
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalUserSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  modalAvatarContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  modalAvatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E1F5FE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FF7A00',
-  },
-  modalAvatarBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#D95C14',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  modalUserName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  modalGreeting: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  ratingButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  ratingButton: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 16,
-    paddingVertical: 24,
-    alignItems: 'center',
-    marginHorizontal: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  ratingButtonActive: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FF7A00',
-  },
-  ratingButtonText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  ratingButtonTextActive: {
-    color: '#FF7A00',
-  },
-  commentSection: {
-    marginBottom: 24,
-  },
-  commentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  commentLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  commentCounter: {
-    fontSize: 12,
-    color: '#999',
-  },
-  commentInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 16,
-    padding: 16,
-    height: 120,
-    fontSize: 15,
-    color: '#333',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 16,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#D95C14',
-    lineHeight: 20,
-  },
-  modalFooter: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  submitReviewButton: {
-    backgroundColor: '#8D6E63',
-    borderRadius: 25,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  submitReviewButtonDisabled: {
-    backgroundColor: '#A1887F',
-  },
-  submitReviewButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
 });
