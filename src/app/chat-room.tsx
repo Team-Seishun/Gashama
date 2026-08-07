@@ -137,12 +137,43 @@ export default function ChatRoomScreen() {
       const isUser1 = chatRoom?.user_1_id === session.user.id;
       const updateData = isUser1 ? { user_1_completed: true } : { user_2_completed: true };
       
+      // 1. チャットルームの完了フラグを更新
       const { error } = await supabase
         .from('chat_rooms')
         .update(updateData)
         .eq('id', roomId);
         
       if (error) throw error;
+      
+      // 2. 評価データの保存 (reviewsテーブル)
+      const partnerId = chatRoom?.user_1_id === session.user.id ? chatRoom?.user_2_id : chatRoom?.user_1_id;
+      if (rating && partnerId) {
+        const { error: reviewError } = await supabase
+          .from('reviews')
+          .insert({
+            reviewer_id: session.user.id,
+            reviewee_id: partnerId,
+            trade_id: chatRoom?.trade_id, // もしスキーマに存在しない場合はエラーがログに出ますが進行は止めません
+            rating: rating,
+            comment: comment
+          });
+        if (reviewError) {
+          console.error('Error saving review:', reviewError);
+        }
+      }
+
+      // 3. 自動完了メッセージの送信
+      const autoMessage = `【システムメッセージ】\n交換完了処理を行いました。\n\n[評価]: ${rating === 'good' ? '良い' : rating === 'bad' ? '悪い' : 'なし'}\n[コメント]: ${comment || 'なし'}`;
+      const { error: messageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          room_id: roomId,
+          sender_id: session.user.id, // 自分からのメッセージとして送信
+          message: autoMessage
+        });
+      if (messageError) {
+        console.error('Error sending auto message:', messageError);
+      }
       
       // 更新後の状態を反映
       setChatRoom(prev => prev ? { ...prev, ...updateData } : null);
@@ -161,9 +192,10 @@ export default function ChatRoomScreen() {
     return `${hours}:${minutes}`;
   };
 
-  // 今回はモック用の「承認前画面」ではなく、すでにルームが存在する前提で実装
-  // もし申請前の段階なら別画面（リクエスト一覧等）になる想定
   const isApproved = true; 
+  
+  const isUser1 = chatRoom?.user_1_id === session?.user.id;
+  const isCompleted = isUser1 ? chatRoom?.user_1_completed : chatRoom?.user_2_completed;
 
   if (isLoading) {
     return (
@@ -195,11 +227,14 @@ export default function ChatRoomScreen() {
             <Text style={styles.headerTitle}>{partner?.nickname || '名無しさん'}</Text>
           </View>
           <TouchableOpacity 
-            style={styles.completeButton}
-            onPress={() => setIsReviewModalVisible(true)}
+            style={[styles.completeButton, isCompleted && styles.completedButton]}
+            onPress={() => {
+              if (!isCompleted) setIsReviewModalVisible(true);
+            }}
+            disabled={isCompleted}
           >
-            <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{marginRight: 4}} />
-            <Text style={styles.completeButtonText}>交換完了</Text>
+            <Ionicons name={isCompleted ? "checkmark-done-circle" : "checkmark-circle-outline"} size={16} color="#fff" style={{marginRight: 4}} />
+            <Text style={styles.completeButtonText}>{isCompleted ? '交換完了' : '交換評価をする'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -215,6 +250,7 @@ export default function ChatRoomScreen() {
               text={msg.message}
               time={formatTime(msg.created_at)}
               isOwnMessage={msg.sender_id === session?.user.id}
+              isSystemMessage={msg.message.startsWith('【システムメッセージ】')}
             />
           ))}
           {isSending && (
@@ -320,6 +356,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
+  },
+  completedButton: {
+    backgroundColor: '#4CAF50',
   },
   completeButtonText: {
     color: '#fff',

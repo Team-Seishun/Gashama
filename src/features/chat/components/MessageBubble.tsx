@@ -5,9 +5,23 @@ type MessageBubbleProps = {
   text: string;
   time: string;
   isOwnMessage: boolean;
+  isSystemMessage?: boolean;
 };
 
-export function MessageBubble({ text, time, isOwnMessage }: MessageBubbleProps) {
+export function MessageBubble({ text, time, isOwnMessage, isSystemMessage }: MessageBubbleProps) {
+  if (isSystemMessage) {
+    const displayText = text.replace('【システムメッセージ】\n', '');
+    return (
+      <View style={styles.systemMessageContainer}>
+        <View style={styles.systemMessageBubble}>
+          <Ionicons name="information-circle" size={16} color="#666" style={{ marginRight: 6 }} />
+          <Text style={styles.systemMessageText}>{displayText}</Text>
+        </View>
+        <Text style={styles.systemTimeText}>{time}</Text>
+      </View>
+    );
+  }
+
   if (isOwnMessage) {
     return (
       <View style={[styles.messageRow, styles.messageRowRight]}>
@@ -85,5 +99,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     marginBottom: 4,
+  },
+  systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+    width: '100%',
+  },
+  systemMessageBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    maxWidth: '90%',
+  },
+  systemMessageText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  systemTimeText: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 4,
   },
 });
