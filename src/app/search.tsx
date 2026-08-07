@@ -2,7 +2,7 @@ import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 
 type SearchResult = {
   type: 'store' | 'gachapon';
@@ -18,9 +18,11 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchStores = async () => {
       if (!searchQuery.trim()) {
-        setResults([]);
+        if (isMounted) setResults([]);
         return;
       }
 
@@ -46,8 +48,10 @@ export default function SearchScreen() {
         combined = combined.concat(gachaponsRes.data.map(g => ({ type: 'gachapon', id: g.id, name: g.name })));
       }
 
-      setResults(combined);
-      setLoading(false);
+      if (isMounted) {
+        setResults(combined);
+        setLoading(false);
+      }
     };
 
     // デバウンス処理（入力の度にAPIが走らないように少し待つ）
@@ -55,7 +59,10 @@ export default function SearchScreen() {
       fetchStores();
     }, 300);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      isMounted = false;
+      clearTimeout(delayDebounceFn);
+    };
   }, [searchQuery]);
 
   const handleSelectResult = (item: SearchResult) => {
@@ -84,17 +91,22 @@ export default function SearchScreen() {
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
-          {searchQuery.length > 0 && (
+          {loading ? (
+            <ActivityIndicator size="small" color="#999" />
+          ) : searchQuery.length > 0 ? (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
               <Ionicons name="close-circle" size={20} color="#999" />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
 
       <FlatList
         data={results}
         keyExtractor={(item) => item.id}
+        initialNumToRender={10}
+        windowSize={5}
+        maxToRenderPerBatch={10}
         renderItem={({ item }) => (
           <TouchableOpacity 
             style={styles.resultItem} 
