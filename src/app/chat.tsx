@@ -1,41 +1,115 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-import { MOCK_CHAT_LIST } from '@/features/chat/constants/mock-data';
+import { Image } from 'expo-image';
+import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { ChatRoomWithPartner } from '@/features/chat/types';
 
 export default function ChatListScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const [chatRooms, setChatRooms] = useState<ChatRoomWithPartner[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handlePress = (item: typeof MOCK_CHAT_LIST[0]) => {
-    // typeが設定されているモックデータは、個別のチャットルームへ遷移する
-    if (item.type) {
-      router.push(`/chat-room?type=${item.type}`);
-    } else {
-      router.push('/chat-room?type=sent'); // デフォルト
-    }
+  useEffect(() => {
+    if (!session?.user.id) return;
+
+    const fetchChatRooms = async (userId: string) => {
+      setIsLoading(true);
+      try {
+        // 1. 自分が参加しているチャットルーム一覧を取得
+        const { data: roomsData, error: roomsError } = await supabase
+          .from('chat_rooms')
+          .select('*')
+          .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
+          .order('updated_at', { ascending: false });
+
+        if (roomsError || !roomsData) throw roomsError;
+
+        // 2. 各ルームの相手情報と最新メッセージを取得する
+        const roomsWithDetails = await Promise.all(
+          roomsData.map(async (room) => {
+            const partnerId = room.user_1_id === userId ? room.user_2_id : room.user_1_id;
+            
+            // 相手のプロフィールを取得
+            const { data: partnerData } = await supabase
+              .from('profiles')
+              .select('id, nickname, icon_image')
+              .eq('id', partnerId)
+              .single();
+
+            // 最新のメッセージを1件取得
+            const { data: messagesData } = await supabase
+              .from('chat_messages')
+              .select('message, created_at')
+              .eq('room_id', room.id)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            return {
+              ...room,
+              partner: partnerData || null,
+              latestMessage: messagesData && messagesData.length > 0 ? messagesData[0].message : 'まだメッセージはありません',
+              latestMessageTime: messagesData && messagesData.length > 0 ? messagesData[0].created_at : room.created_at,
+            } as ChatRoomWithPartner;
+          })
+        );
+
+        // 最新メッセージの日時でソート
+        roomsWithDetails.sort((a, b) => {
+          const timeA = new Date(a.latestMessageTime || 0).getTime();
+          const timeB = new Date(b.latestMessageTime || 0).getTime();
+          return timeB - timeA;
+        });
+
+        setChatRooms(roomsWithDetails);
+      } catch (error) {
+        console.error('Error fetching chat rooms:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchChatRooms(session.user.id);
+  }, [session?.user.id]);
+
+  const handlePress = (roomId: string) => {
+    router.push(`/chat-room?roomId=${roomId}`);
   };
 
-  const renderItem = ({ item }: { item: typeof MOCK_CHAT_LIST[0] }) => (
-    <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item)}>
+  const formatTimeAgo = (dateString: string | null) => {
+    if (!dateString) return '';
+    // eslint-disable-next-line react-hooks/purity
+    const diff = Date.now() - new Date(dateString).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'たった今';
+    if (minutes < 60) return `${minutes}分前`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}時間前`;
+    return `${Math.floor(hours / 24)}日前`;
+  };
+
+  const renderItem = ({ item }: { item: ChatRoomWithPartner }) => (
+    <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item.id)}>
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: item.userColor }]}>
-          {item.isTextAvatar ? (
-            <Text style={styles.avatarInitial}>{item.textAvatarInitial}</Text>
-          ) : (
-            <Ionicons name="person" size={24} color={item.userColor === '#03A9F4' ? '#fff' : '#999'} />
-          )}
-        </View>
-        {item.hasUnread && <View style={styles.unreadDot} />}
+        {item.partner?.icon_image && item.partner.icon_image.startsWith('http') ? (
+          <Image source={{ uri: item.partner.icon_image }} style={styles.avatar} contentFit="cover" />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: '#E1F5FE' }]}>
+            <Ionicons name="person" size={24} color="#007AFF" />
+          </View>
+        )}
       </View>
       
       <View style={styles.chatInfo}>
         <View style={styles.chatHeader}>
-          <Text style={styles.userName}>{item.user}</Text>
-          <Text style={[styles.timeText, item.hasUnread && styles.timeTextUnread]}>{item.time}</Text>
+          <Text style={styles.userName}>{item.partner?.nickname || '名無しさん'}</Text>
+          <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
         </View>
         <Text style={styles.messageText} numberOfLines={1}>
-          {item.message}
+          {item.latestMessage}
         </Text>
       </View>
     </TouchableOpacity>
@@ -44,20 +118,30 @@ export default function ChatListScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* シンプルなヘッダー（なくても良いが画面の余白として） */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>メッセージ</Text>
         </View>
 
-        <FlatList
-          data={MOCK_CHAT_LIST}
-          keyExtractor={(item) => item.id}
-          initialNumToRender={10}
-          windowSize={5}
-          maxToRenderPerBatch={10}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-        />
+        {isLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#FF7A00" />
+          </View>
+        ) : chatRooms.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="chatbubbles-outline" size={48} color="#ccc" style={{ marginBottom: 16 }} />
+            <Text style={{ color: '#999', fontSize: 16 }}>チャット履歴がありません</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={chatRooms}
+            keyExtractor={(item) => item.id}
+            initialNumToRender={10}
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -71,7 +155,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA', // 少しグレーがかった背景色
+    backgroundColor: '#FAFAFA',
   },
   header: {
     paddingHorizontal: 20,
@@ -84,6 +168,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   chatListItem: {
     flexDirection: 'row',
@@ -102,22 +187,8 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  unreadDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FF7A00', // オレンジのドット
-    borderWidth: 2,
-    borderColor: '#FAFAFA',
+    backgroundColor: '#F5F5F5',
+    overflow: 'hidden',
   },
   chatInfo: {
     flex: 1,
@@ -137,10 +208,6 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     color: '#999',
-  },
-  timeTextUnread: {
-    color: '#8D6E63', // 未読時の時間は少し茶色っぽく
-    fontWeight: 'bold',
   },
   messageText: {
     fontSize: 14,

@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,28 +10,168 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   SafeAreaView,
-  Modal,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ReviewModal } from '@/features/chat/components/ReviewModal';
 import { MessageBubble } from '@/features/chat/components/MessageBubble';
+import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
 
 export default function ChatRoomScreen() {
   const router = useRouter();
-  const { type } = useLocalSearchParams<{ type: 'sent' | 'received' }>();
+  const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const { session } = useAuth();
   
-  // 状態管理: 承認待ち / 承認済み
-  // receivedの場合は初期状態が「自分が承認するかどうか」
-  const [isApproved, setIsApproved] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [partner, setPartner] = useState<Profile | null>(null);
+  const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
   const [inputText, setInputText] = useState('');
   
-  // 評価モーダルの状態
-  const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   
-  // ローディング状態 (モック用)
-  const [isApproving, setIsApproving] = useState(false);
+  const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
+  
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (!session?.user.id || !roomId) return;
+    
+    const fetchRoomAndMessages = async () => {
+      setIsLoading(true);
+      try {
+        const { data: roomData, error: roomError } = await supabase
+          .from('chat_rooms')
+          .select('*')
+          .eq('id', roomId)
+          .single();
+          
+        if (roomError || !roomData) throw roomError;
+        setChatRoom(roomData);
+        
+        const partnerId = roomData.user_1_id === session!.user.id ? roomData.user_2_id : roomData.user_1_id;
+        const { data: partnerData } = await supabase
+          .from('profiles')
+          .select('id, nickname, icon_image')
+          .eq('id', partnerId)
+          .single();
+          
+        if (partnerData) setPartner(partnerData);
+        
+        const { data: messagesData, error: messagesError } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('room_id', roomId)
+          .order('created_at', { ascending: true });
+          
+        if (messagesError) throw messagesError;
+        if (messagesData) setMessages(messagesData);
+        
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 100);
+      } catch (error) {
+        console.error('Error fetching chat details:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRoomAndMessages();
+    
+    // Realtime サブスクリプション
+    const channel = supabase
+      .channel(`chat_messages_${roomId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const newMessage = payload.new as ChatMessage;
+          setMessages((prev) => {
+            // 重複防止
+            if (prev.find(m => m.id === newMessage.id)) return prev;
+            return [...prev, newMessage];
+          });
+          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user.id, roomId, session]);
+
+  const handleSend = async () => {
+    if (!inputText.trim() || !session?.user.id || !roomId) return;
+    
+    const textToSend = inputText.trim();
+    setInputText('');
+    setIsSending(true);
+    
+    try {
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          room_id: roomId,
+          sender_id: session.user.id,
+          message: textToSend
+        });
+        
+      if (error) {
+        console.error('Error sending message:', error);
+        setInputText(textToSend);
+      }
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleComplete = async (rating: 'good' | 'bad' | null, comment: string) => {
+    setIsReviewSubmitting(true);
+    try {
+      if (!session?.user.id || !roomId) return;
+      
+      const isUser1 = chatRoom?.user_1_id === session.user.id;
+      const updateData = isUser1 ? { user_1_completed: true } : { user_2_completed: true };
+      
+      const { error } = await supabase
+        .from('chat_rooms')
+        .update(updateData)
+        .eq('id', roomId);
+        
+      if (error) throw error;
+      
+      // 更新後の状態を反映
+      setChatRoom(prev => prev ? { ...prev, ...updateData } : null);
+      setIsReviewModalVisible(false);
+    } catch (error) {
+      console.error('Error completing trade:', error);
+    } finally {
+      setIsReviewSubmitting(false);
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  // 今回はモック用の「承認前画面」ではなく、すでにルームが存在する前提で実装
+  // もし申請前の段階なら別画面（リクエスト一覧等）になる想定
+  const isApproved = true; 
+
+  if (isLoading) {
+    return (
+      <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FF7A00" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -45,10 +185,14 @@ export default function ChatRoomScreen() {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <View style={styles.headerImagePlaceholder}>
-               <Ionicons name="image-outline" size={16} color="#999" />
-            </View>
-            <Text style={styles.headerTitle}>ちいかわ</Text>
+            {partner?.icon_image && partner.icon_image.startsWith('http') ? (
+              <Image source={{ uri: partner.icon_image }} style={styles.headerAvatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.headerAvatar, { backgroundColor: '#E1F5FE' }]}>
+                <Ionicons name="person" size={16} color="#007AFF" />
+              </View>
+            )}
+            <Text style={styles.headerTitle}>{partner?.nickname || '名無しさん'}</Text>
           </View>
           <TouchableOpacity 
             style={styles.completeButton}
@@ -60,87 +204,23 @@ export default function ChatRoomScreen() {
         </View>
 
         {/* チャットエリア */}
-        <ScrollView contentContainerStyle={styles.chatScrollContainer}>
-          {!isApproved ? (
-            // ================= 承認前 =================
-            type === 'received' ? (
-              // ▼ 相手から申請が来た場合
-              <View style={styles.waitingContainer}>
-                <Ionicons name="mail-unread-outline" size={48} color="#D95C14" style={{marginBottom: 10}} />
-                <Text style={styles.waitingText}>Mina_Chanさんから交換申請が届きました！</Text>
-                <Text style={styles.subText}>条件を確認して承認してください。</Text>
-                
-                <View style={styles.actionButtonsRow}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.approveButton, isApproving && styles.approveButtonDisabled]}
-                    disabled={isApproving}
-                    onPress={() => {
-                      setIsApproving(true);
-                      setTimeout(() => {
-                        setIsApproving(false);
-                        setIsApproved(true);
-                      }, 1000); // 1秒間の疑似ローディング
-                    }}
-                  >
-                    {isApproving ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.approveButtonText}>承認する</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionButton, styles.rejectButton]}>
-                    <Text style={styles.rejectButtonText}>拒否する</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              // ▼ 自分から申請を送った場合 (sent)
-              <View style={styles.waitingContainer}>
-                <Ionicons name="time-outline" size={48} color="#ccc" style={{marginBottom: 10}} />
-                <Text style={styles.waitingText}>相手の承認を待っています...</Text>
-                
-                {/* テスト用ボタン */}
-                <TouchableOpacity 
-                  style={styles.testApproveButton}
-                  onPress={() => setIsApproved(true)}
-                >
-                  <Text style={styles.testApproveButtonText}>（テスト用）相手が承認する</Text>
-                </TouchableOpacity>
-              </View>
-            )
-          ) : (
-            // ================= 承認済み =================
-            <>
-              {/* 承認バッジ */}
-              <View style={styles.approvedBadgeContainer}>
-                <View style={styles.approvedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color="#fff" style={{marginRight: 4}} />
-                  <Text style={styles.approvedBadgeText}>承認</Text>
-                </View>
-                <Text style={styles.dateText}>今日 14:22</Text>
-              </View>
-
-              {/* メッセージ 1 (相手) */}
-              <MessageBubble 
-                text="はじめまして！マッチングありがとうございます。ウサギの在庫あります！"
-                time="14:23"
-                isOwnMessage={false}
-              />
-
-              {/* メッセージ 2 (自分) */}
-              <MessageBubble 
-                text="こちらこそありがとうございます！ハチワレも未開封の状態で保管しております。交換よろしくお願いします！"
-                time="14:25"
-                isOwnMessage={true}
-              />
-
-              {/* メッセージ 3 (相手) */}
-              <MessageBubble 
-                text="良かったです！交換方法ですが、都内での手渡しで場所の調整をさせていただけますでしょうか？"
-                time="14:28"
-                isOwnMessage={false}
-              />
-            </>
+        <ScrollView 
+          ref={scrollViewRef}
+          contentContainerStyle={styles.chatScrollContainer}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.map((msg) => (
+            <MessageBubble 
+              key={msg.id}
+              text={msg.message}
+              time={formatTime(msg.created_at)}
+              isOwnMessage={msg.sender_id === session?.user.id}
+            />
+          ))}
+          {isSending && (
+            <View style={{ alignItems: 'flex-end', marginRight: 10, marginTop: 4 }}>
+              <ActivityIndicator size="small" color="#FF7A00" />
+            </View>
           )}
         </ScrollView>
 
@@ -148,10 +228,10 @@ export default function ChatRoomScreen() {
         <View style={styles.bottomArea}>
           {isApproved && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplyScroll}>
-              <TouchableOpacity style={styles.quickReplyBadge}>
+              <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('よろしくお願いします！')}>
                 <Text style={styles.quickReplyText}>よろしくお願いします！</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quickReplyBadge}>
+              <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('駅前で交換できますか？')}>
                 <Text style={styles.quickReplyText}>駅前で交換できますか？</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -164,15 +244,19 @@ export default function ChatRoomScreen() {
             <View style={[styles.inputWrapper, !isApproved && styles.inputWrapperDisabled]}>
               <TextInput
                 style={styles.textInput}
-                placeholder={isApproved ? "メッセージを入力..." : type === 'received' ? "承認すると入力できます" : "相手が承認すると入力できます"}
+                placeholder={isApproved ? "メッセージを入力..." : "相手が承認すると入力できます"}
                 placeholderTextColor="#999"
                 value={inputText}
                 onChangeText={setInputText}
-                editable={isApproved} // 承認前は無効化
+                editable={isApproved}
               />
               <Ionicons name="happy-outline" size={24} color={isApproved ? "#ccc" : "#eee"} style={{marginRight: 10}} />
             </View>
-            <TouchableOpacity style={[styles.sendButton, !isApproved && styles.sendButtonDisabled]} disabled={!isApproved}>
+            <TouchableOpacity 
+              style={[styles.sendButton, (!isApproved || !inputText.trim()) && styles.sendButtonDisabled]} 
+              disabled={!isApproved || !inputText.trim() || isSending}
+              onPress={handleSend}
+            >
               <Ionicons name="send" size={16} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -184,16 +268,8 @@ export default function ChatRoomScreen() {
         isVisible={isReviewModalVisible}
         onClose={() => setIsReviewModalVisible(false)}
         isSubmitting={isReviewSubmitting}
-        onSubmit={(rating, comment) => {
-          // 送信処理（モック）
-          setIsReviewSubmitting(true);
-          setTimeout(() => {
-            setIsReviewSubmitting(false);
-            setIsReviewModalVisible(false);
-          }, 1000);
-        }}
+        onSubmit={handleComplete}
       />
-
     </SafeAreaView>
   );
 }
@@ -207,7 +283,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  // ヘッダー
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -224,14 +299,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerImagePlaceholder: {
+  headerAvatar: {
     width: 24,
     height: 24,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 4,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
+    overflow: 'hidden',
   },
   headerTitle: {
     fontSize: 16,
@@ -251,96 +326,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  
-  // チャットエリア
   chatScrollContainer: {
     padding: 16,
     paddingBottom: 40,
     flexGrow: 1,
   },
-  waitingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 100,
-  },
-  waitingText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  subText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 24,
-  },
-  testApproveButton: {
-    backgroundColor: '#333',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-  },
-  testApproveButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    marginHorizontal: 8,
-  },
-  approveButton: {
-    backgroundColor: '#FF7A00',
-  },
-  approveButtonDisabled: {
-    backgroundColor: '#FFB870',
-  },
-  approveButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  rejectButton: {
-    backgroundColor: '#F5F5F5',
-  },
-  rejectButtonText: {
-    color: '#666',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  
-  // 承認済みバッジ
-  approvedBadgeContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  approvedBadge: {
-    backgroundColor: '#FF7A00',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  approvedBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  dateText: {
-    fontSize: 12,
-    color: '#999',
-  },
-
-  // 下部エリア
   bottomArea: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -403,5 +393,4 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: '#FFE5CC',
   },
-
 });
