@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -13,8 +13,9 @@ export default function ChatListScreen() {
   const [chatRooms, setChatRooms] = useState<ChatRoomWithPartner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (!session?.user.id) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!session?.user.id) return;
 
     const fetchChatRooms = async (userId: string) => {
       setIsLoading(true);
@@ -72,8 +73,9 @@ export default function ChatListScreen() {
       }
     };
 
-    fetchChatRooms(session.user.id);
-  }, [session?.user.id]);
+      fetchChatRooms(session.user.id);
+    }, [session?.user.id])
+  );
 
   const handlePress = (roomId: string) => {
     router.push(`/chat-room?roomId=${roomId}`);
