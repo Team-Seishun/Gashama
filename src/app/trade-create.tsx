@@ -123,7 +123,7 @@ export default function TradeCreateScreen() {
       Alert.alert('募集完了', 'トレードの募集を開始しました！', [
         {
           text: 'OK',
-          onPress: () => router.replace('/trade'),
+          onPress: () => router.replace({ pathname: '/(tabs)/post', params: { tab: 'trade' } }),
         },
       ]);
     } catch (error: any) {
