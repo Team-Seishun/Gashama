@@ -41,10 +41,16 @@ export default function CameraScreen() {
           // 3. 撮影されたらそのまま report-create へ遷移
           if (!result.canceled && result.assets[0]?.uri) {
             const capturedUri = result.assets[0].uri;
+            const capturedFileName = result.assets[0].fileName;
+            const capturedMimeType = result.assets[0].mimeType;
             router.replace({
               pathname: '/report-create',
               // URIを安全にパラメータとして渡すためにエンコードする
-              params: { imageUri: encodeURIComponent(capturedUri) },
+              params: {
+                imageUri: encodeURIComponent(capturedUri),
+                imageFileName: capturedFileName ? encodeURIComponent(capturedFileName) : undefined,
+                imageMimeType: capturedMimeType ? encodeURIComponent(capturedMimeType) : undefined,
+              },
             });
           } else {
             // 撮影がキャンセルされた場合は元の画面に戻る
