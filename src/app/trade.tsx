@@ -28,7 +28,7 @@ export default function TradeScreen() {
     try {
       const { data, error } = await supabase
         .from('trades')
-        .select('*')
+        .select('id, item_give, item_want, user_name, status, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
