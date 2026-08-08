@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginHorizontal: 16,
     marginBottom: 20,
-    borderRadius: 30,
+    borderRadius: 100, // 確実にピル形状(丸)にするため大きな値を設定
     paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -143,9 +143,11 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     marginBottom: 4,
+    overflow: 'hidden', // Androidで背景色が四角くはみ出るのを防ぐ
   },
   activeIconContainer: {
     backgroundColor: '#F8D8B8',
+    borderRadius: 24, // Android向けに再指定
   },
   tabLabel: {
     fontSize: 10,
