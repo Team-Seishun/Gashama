@@ -23,7 +23,7 @@ export default function TradeScreen() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-
+const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fetchTrades = async () => {
     try {
       const { data, error } = await supabase
