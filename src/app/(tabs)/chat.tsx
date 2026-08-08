@@ -13,9 +13,9 @@ export default function ChatListScreen() {
   const [chatRooms, setChatRooms] = useState<ChatRoomWithPartner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchChatRooms = useCallback(async (userId: string) => {
+  const fetchChatRooms = useCallback(async (userId: string, isInitialLoad = false) => {
     // 最初の読み込み時のみローディング表示（バックグラウンド更新では出さない）
-    if (chatRooms.length === 0) setIsLoading(true);
+    if (isInitialLoad) setIsLoading(true);
     
     try {
         // 1. 自分が参加しているチャットルーム一覧を取得
@@ -27,57 +27,70 @@ export default function ChatListScreen() {
 
         if (roomsError || !roomsData) throw roomsError;
 
-        // 2. 各ルームの相手情報と最新メッセージを取得する
-        const roomsWithDetails = await Promise.all(
-          roomsData.map(async (room) => {
-            const partnerId = room.user_1_id === userId ? room.user_2_id : room.user_1_id;
-            
-            const [
-              { data: partnerData },
-              { data: messagesData },
-              { count: unreadCount }
-            ] = await Promise.all([
-              // 相手のプロフィールを取得
-              supabase
-                .from('profiles')
-                .select('id, nickname, icon_image')
-                .eq('id', partnerId)
-                .single(),
-              // 最新のメッセージを1件取得
-              supabase
-                .from('chat_messages')
-                .select('message, image_url, created_at')
-                .eq('room_id', room.id)
-                .order('created_at', { ascending: false })
-                .limit(1),
-              // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
-              supabase
-                .from('chat_messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('room_id', room.id)
-                .eq('is_read', false)
-                .neq('sender_id', userId)
-            ]);
+        if (roomsData.length === 0) {
+          setChatRooms([]);
+          return;
+        }
 
-            let latestMessageText = 'まだメッセージはありません';
-            if (messagesData && messagesData.length > 0) {
-              const msg = messagesData[0];
-              if (msg.message) {
-                latestMessageText = msg.message;
-              } else if (msg.image_url) {
-                latestMessageText = '写真を送信しました';
-              }
+        const roomIds = roomsData.map(r => r.id);
+        const partnerIds = roomsData.map(r => r.user_1_id === userId ? r.user_2_id : r.user_1_id);
+        const uniquePartnerIds = [...new Set(partnerIds)];
+
+        // 2. 相手プロフィールとメッセージを一括取得（N+1問題の解消）
+        const [
+          { data: profilesData },
+          { data: messagesData }
+        ] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, nickname, icon_image')
+            .in('id', uniquePartnerIds),
+          supabase
+            .from('chat_messages')
+            .select('room_id, message, image_url, created_at, is_read, sender_id')
+            .in('room_id', roomIds)
+            .order('created_at', { ascending: false })
+        ]);
+
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        
+        // メッセージをルームIDごとに整理
+        const messagesByRoom = new Map<string, any[]>();
+        messagesData?.forEach(msg => {
+          if (!messagesByRoom.has(msg.room_id)) {
+            messagesByRoom.set(msg.room_id, []);
+          }
+          messagesByRoom.get(msg.room_id)!.push(msg);
+        });
+
+        // 3. 各ルームの情報を結合
+        const roomsWithDetails = roomsData.map(room => {
+          const partnerId = room.user_1_id === userId ? room.user_2_id : room.user_1_id;
+          const partner = profilesMap.get(partnerId) || null;
+          
+          const roomMessages = messagesByRoom.get(room.id) || [];
+          const latestMsg = roomMessages[0];
+          
+          let latestMessageText = 'まだメッセージはありません';
+          if (latestMsg) {
+            if (latestMsg.message) {
+              latestMessageText = latestMsg.message;
+            } else if (latestMsg.image_url) {
+              latestMessageText = '写真を送信しました';
             }
-
-            return {
-              ...room,
-              partner: partnerData || null,
-              latestMessage: latestMessageText,
-              latestMessageTime: messagesData && messagesData.length > 0 ? messagesData[0].created_at : room.created_at,
-              unreadCount: unreadCount || 0,
-            } as ChatRoomWithPartner;
-          })
-        );
+          }
+          
+          // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
+          const unreadCount = roomMessages.filter(m => !m.is_read && m.sender_id !== userId).length;
+          
+          return {
+            ...room,
+            partner,
+            latestMessage: latestMessageText,
+            latestMessageTime: latestMsg ? latestMsg.created_at : room.created_at,
+            unreadCount
+          } as ChatRoomWithPartner;
+        });
 
         // 未読メッセージがあるものを優先し、その中で最新メッセージ順にソート
         roomsWithDetails.sort((a, b) => {
@@ -100,13 +113,13 @@ export default function ChatListScreen() {
       } finally {
         setIsLoading(false);
       }
-  }, [chatRooms.length]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       if (!session?.user.id) return;
-      fetchChatRooms(session.user.id);
-    }, [session, fetchChatRooms])
+      fetchChatRooms(session.user.id, true);
+    }, [session?.user.id, fetchChatRooms])
   );
 
   useEffect(() => {
@@ -117,15 +130,15 @@ export default function ChatListScreen() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        () => {
-          fetchChatRooms(session.user.id);
+        (payload) => {
+          fetchChatRooms(session.user.id, false);
         }
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
-        () => {
-          fetchChatRooms(session.user.id);
+        (payload) => {
+          fetchChatRooms(session.user.id, false);
         }
       )
       .subscribe();
