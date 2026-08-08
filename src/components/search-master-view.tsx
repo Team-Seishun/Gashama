@@ -43,11 +43,18 @@ export default function SearchMasterView({ mode, onSelect, onClose, placeholder,
 
     const fetchData = async () => {
       if (!searchQuery.trim()) {
-        if (isMounted) setResults([]);
+        if (isMounted) {
+          setResults([]);
+          setLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
+      // 通信が速すぎる場合の一瞬のチラつき（フリッカー）を防ぐため、
+      // 200ms以上かかった時だけローディングインジケータを表示する
+      const loadingTimeout = setTimeout(() => {
+        if (isMounted) setLoading(true);
+      }, 200);
 
       const fetchStore = (mode === 'all' || mode === 'store');
       const fetchGachapon = (mode === 'all' || mode === 'gachapon');
@@ -103,6 +110,8 @@ export default function SearchMasterView({ mode, onSelect, onClose, placeholder,
           });
         }
       });
+
+      clearTimeout(loadingTimeout);
 
       if (isMounted) {
         setResults(combined);
