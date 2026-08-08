@@ -10,7 +10,6 @@ import { ChatRoomWithPartner } from '@/features/chat/types';
 
 const formatTimeAgo = (dateString: string | null) => {
   if (!dateString) return '';
-  // eslint-disable-next-line react-hooks/purity
   const diff = Date.now() - new Date(dateString).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'たった今';
@@ -81,6 +80,8 @@ const ChatListItem = memo(({ item, onPress }: { item: ChatRoomWithPartner, onPre
     </TouchableOpacity>
   );
 });
+
+ChatListItem.displayName = 'ChatListItem';
 
 export default function ChatListScreen() {
   const router = useRouter();
@@ -194,7 +195,7 @@ export default function ChatListScreen() {
     useCallback(() => {
       if (!session?.user.id) return;
       fetchChatRooms(session.user.id, true);
-    }, [session?.user.id, fetchChatRooms])
+    }, [session, fetchChatRooms])
   );
 
   useEffect(() => {
@@ -221,7 +222,7 @@ export default function ChatListScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [session?.user.id, fetchChatRooms]);
+  }, [session, fetchChatRooms]);
 
   const handlePress = useCallback((roomId: string) => {
     router.push(`/chat-room?roomId=${roomId}`);
