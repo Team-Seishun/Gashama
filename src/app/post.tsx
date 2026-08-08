@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -61,7 +61,6 @@ const MOCK_TRADES: TradeItem[] = Array.from({ length: 20 }).map((_, i) => ({
 // メインコンポーネント
 // ----------------------------------------------------
 export default function PostScreen() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>('trade');
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

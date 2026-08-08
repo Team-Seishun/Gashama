@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '../utils/supabase';
 
@@ -23,11 +23,14 @@ export function useMasterData(params?: InitialParams) {
   const [selectedGachapon, setSelectedGachapon] = useState<GachaponItem | null>(null);
   const [selectedItem, setSelectedItem] = useState<ItemType | null>(null);
 
-  const fetchMasterData = async () => {
-    try {
-      setFetching(true);
-      setLoadError(null);
+  const storeId = params?.storeId;
+  const gachaponId = params?.gachaponId;
+  const itemId = params?.itemId;
 
+  const fetchMasterData = useCallback(async () => {
+    setFetching(true);
+    setLoadError(null);
+    try {
       const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
         supabase.from('stores').select('id, name').limit(100),
         supabase.from('gachapons').select('id, name').limit(100),
@@ -46,20 +49,20 @@ export function useMasterData(params?: InitialParams) {
       setGachapons(gachaponData);
       setItems(itemData);
 
-      if (params?.storeId) {
-        const matched = storeData.find((s) => s.id === params.storeId);
+      if (storeId) {
+        const matched = storeData.find((s) => s.id === storeId);
         if (matched) setSelectedStore(matched);
       } else if (storeData.length > 0) {
         setSelectedStore(storeData[0]);
       }
 
-      if (params?.gachaponId) {
-        const matched = gachaponData.find((g) => g.id === params.gachaponId);
+      if (gachaponId) {
+        const matched = gachaponData.find((g) => g.id === gachaponId);
         if (matched) setSelectedGachapon(matched);
       }
 
-      if (params?.itemId) {
-        const matched = itemData.find((i) => i.id === params.itemId);
+      if (itemId) {
+        const matched = itemData.find((i) => i.id === itemId);
         if (matched) setSelectedItem(matched);
       }
     } catch (error: any) {
@@ -69,11 +72,14 @@ export function useMasterData(params?: InitialParams) {
     } finally {
       setFetching(false);
     }
-  };
+  }, [storeId, gachaponId, itemId]);
 
   useEffect(() => {
-    fetchMasterData();
-  }, [params?.storeId, params?.gachaponId, params?.itemId]);
+    const timer = setTimeout(() => {
+      fetchMasterData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchMasterData]);
 
   return {
     stores,
