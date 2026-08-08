@@ -21,115 +21,32 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ReviewModal } from '@/features/chat/components/ReviewModal';
 import { MessageBubble } from '@/features/chat/components/MessageBubble';
 import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
+import { useChatRoom } from '@/features/chat/hooks/useChatRoom';
 
 export default function ChatRoomScreen() {
   const router = useRouter();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { session } = useAuth();
   
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [partner, setPartner] = useState<Profile | null>(null);
-  const [myProfile, setMyProfile] = useState<Profile | null>(null);
-  const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
-  const [inputText, setInputText] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
   
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    messages,
+    setMessages,
+    partner,
+    myProfile,
+    chatRoom,
+    setChatRoom,
+    isLoading
+  } = useChatRoom(roomId, session?.user?.id, scrollViewRef);
+
+  const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   
   const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
   const [selectedImageMessage, setSelectedImageMessage] = useState<ChatMessage | null>(null);
   const selectedMessageSender = selectedImageMessage?.sender_id === session?.user.id ? myProfile : partner;
-  
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    if (!session?.user.id || !roomId) return;
-    
-    const fetchRoomAndMessages = async () => {
-      setIsLoading(true);
-      try {
-        const { data: roomData, error: roomError } = await supabase
-          .from('chat_rooms')
-          .select('*')
-          .eq('id', roomId)
-          .single();
-          
-        if (roomError || !roomData) throw roomError;
-        setChatRoom(roomData);
-        
-        const partnerId = roomData.user_1_id === session!.user.id ? roomData.user_2_id : roomData.user_1_id;
-        const { data: partnerData } = await supabase
-          .from('profiles')
-          .select('id, nickname, icon_image')
-          .eq('id', partnerId)
-          .single();
-          
-        if (partnerData) setPartner(partnerData);
-        
-        const { data: myData } = await supabase
-          .from('profiles')
-          .select('id, nickname, icon_image')
-          .eq('id', session!.user.id)
-          .single();
-        if (myData) setMyProfile(myData);
-        
-        const { data: messagesData, error: messagesError } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .eq('room_id', roomId)
-          .order('created_at', { ascending: true });
-          
-        if (messagesError) throw messagesError;
-        if (messagesData) setMessages(messagesData);
-        
-        // 自分が受信者で未読のメッセージを既読に更新する
-        const { data: updatedRows, error: updateError } = await supabase
-          .from('chat_messages')
-          .update({ is_read: true })
-          .eq('room_id', roomId)
-          .eq('is_read', false)
-          .neq('sender_id', session!.user.id)
-          .select();
-          
-        console.log('Update result - updated rows:', updatedRows?.length);
-          
-        if (updateError) {
-          console.error('Failed to update read status:', updateError);
-        }
-        
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 100);
-      } catch (error) {
-        console.error('Error fetching chat details:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchRoomAndMessages();
-    
-    // Realtime サブスクリプション
-    const channel = supabase
-      .channel(`chat_messages_${roomId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setMessages((prev) => {
-            // 重複防止
-            if (prev.find(m => m.id === newMessage.id)) return prev;
-            return [...prev, newMessage];
-          });
-          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session?.user.id, roomId, session]);
 
   const handleSend = async () => {
     if (!inputText.trim() || !session?.user.id || !roomId) return;
