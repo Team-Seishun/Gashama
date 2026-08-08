@@ -49,7 +49,7 @@ export default function ReportCreateScreen() {
     try {
       return decodeURIComponent(raw);
     } catch {
-      return null;
+      return raw;
     }
   };
 
@@ -153,7 +153,7 @@ export default function ReportCreateScreen() {
   };
 
   const handleTakePhoto = () => {
-    router.push('/camera');
+    router.replace('/camera');
   };
 
   // ----------------------------------------------------
@@ -228,7 +228,7 @@ export default function ReportCreateScreen() {
         item_id: selectedItem?.id ?? null, // uuid (FK, 任意)
         buytime: new Date().toISOString(), // timestamp
         photo_url: photoUrl,            // string
-        stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 余裕あり)
+        stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 在庫あり)
       });
 
       if (dbError) throw new Error(`DB保存失敗: ${dbError.message}`);
