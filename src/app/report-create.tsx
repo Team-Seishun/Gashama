@@ -1,10 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,10 +17,22 @@ import {
 } from 'react-native';
 import { supabase } from '../utils/supabase';
 
+// DBの型定義 (IDをすべて id に統一)
+type StoreItem = { id: string; name: string };
+type GachaponItem = { id: string; name: string };
+type ItemType = { id: string; name: string };
+
+// モーダル選択用共通型
+type ModalOptionItem = {
+  id: string;
+  name: string;
+  raw: StoreItem | GachaponItem | ItemType;
+};
+
 export default function ReportCreateScreen() {
   const router = useRouter();
 
-  // パラメータの取得（画像URI + 各種ID）
+  // URLパラメータからの初期値取得
   const params = useLocalSearchParams<{
     imageUri?: string | string[];
     storeId?: string | string[];
@@ -24,38 +40,106 @@ export default function ReportCreateScreen() {
     itemId?: string | string[];
   }>();
 
-  // 単一文字列として安全にデコード抽出
   const parseParam = (param?: string | string[]) => {
     const raw = Array.isArray(param) ? param[0] : param;
     return raw ? decodeURIComponent(raw) : null;
   };
 
   const imageUri = parseParam(params.imageUri);
-  const storeId = parseParam(params.storeId);
-  const gachaponId = parseParam(params.gachaponId);
-  const itemId = parseParam(params.itemId);
 
-  if (__DEV__) {
-    console.log('ReportCreateScreen Received Params:', {
-      imageUri,
-      storeId,
-      gachaponId,
-      itemId,
-    });
-  }
+  // DBから取得したマスターデータ一覧
+  const [stores, setStores] = useState<StoreItem[]>([]);
+  const [gachapons, setGachapons] = useState<GachaponItem[]>([]);
+  const [items, setItems] = useState<ItemType[]>([]);
+  const [fetching, setFetching] = useState<boolean>(true);
 
-  // 画面内の状態（State）
-  const [activeTab, setActiveTab] = useState<'report' | 'matching'>('report');
+  // 選択中の状態（State）
+  const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
+  const [selectedGachapon, setSelectedGachapon] = useState<GachaponItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ItemType | null>(null);
+
+  // モーダルの開閉状態
+  const [modalType, setModalType] = useState<'store' | 'gachapon' | 'item' | null>(null);
+
   const [stockStatus, setStockStatus] = useState<number>(2); // 2: 在庫あり, 1: 残りわずか, 0: 売り切れ
   const [loading, setLoading] = useState(false);
 
-  // カメラ画面への遷移（撮影ボタン押下時）
+  // ----------------------------------------------------
+  // Supabase からマスターデータを取得
+  // ----------------------------------------------------
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        setFetching(true);
+
+        const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
+          supabase.from('stores').select('id, name'),
+          supabase.from('gachapons').select('id, name'),
+          supabase.from('gachapon_items').select('id, name'),
+        ]);
+
+        if (storesRes.error) throw storesRes.error;
+        if (gachaponsRes.error) throw gachaponsRes.error;
+        if (itemsRes.error) throw itemsRes.error;
+
+        const storeData = storesRes.data || [];
+        const gachaponData = gachaponsRes.data || [];
+        const itemData = itemsRes.data || [];
+
+        setStores(storeData);
+        setGachapons(gachaponData);
+        setItems(itemData);
+
+        const paramStoreId = parseParam(params.storeId);
+        const paramGachaponId = parseParam(params.gachaponId);
+        const paramItemId = parseParam(params.itemId);
+
+        if (paramStoreId) {
+          const matched = storeData.find((s) => s.id === paramStoreId);
+          if (matched) setSelectedStore(matched);
+        } else if (storeData.length > 0) {
+          setSelectedStore(storeData[0]);
+        }
+
+        if (paramGachaponId) {
+          const matched = gachaponData.find((g) => g.id === paramGachaponId);
+          if (matched) setSelectedGachapon(matched);
+        }
+
+        if (paramItemId) {
+          const matched = itemData.find((i) => i.id === paramItemId);
+          if (matched) setSelectedItem(matched);
+        }
+      } catch (error: any) {
+        console.error('マスターデータ取得エラー:', error);
+        Alert.alert('データ取得失敗', '店舗やガチャ情報の取得に失敗しました。');
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    fetchMasterData();
+  }, []);
+
   const handleTakePhoto = () => {
     router.push('/camera');
   };
 
-  // 投稿処理
+  // ----------------------------------------------------
+  // 投稿処理 (reports テーブルへの INSERT)
+  // ----------------------------------------------------
   const handleSubmit = async () => {
+    // 1. バリデーションチェック
+    if (!selectedStore) {
+      Alert.alert('入力漏れ', '対象店舗を選択してください。');
+      return;
+    }
+
+    if (!selectedGachapon) {
+      Alert.alert('入力漏れ', 'ガチャガチャ（商品名）を選択してください。');
+      return;
+    }
+
     if (!imageUri) {
       Alert.alert('写真が必要です', 'プレイ証明写真を撮影してください。');
       return;
@@ -64,13 +148,13 @@ export default function ReportCreateScreen() {
     try {
       setLoading(true);
 
-      // 1. ログインユーザーの取得
+      // 認証ユーザー取得
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) throw new Error('ログインしていません。');
+      if (!user) throw new Error('ログイン状態が確認できません。再度ログインしてください。');
 
-      // 2. Storage (photos バケット) へ画像をアップロード
+      // 画像のアップロード処理
       const response = await fetch(imageUri);
       const arrayBuffer = await response.arrayBuffer();
 
@@ -87,90 +171,123 @@ export default function ReportCreateScreen() {
 
       if (uploadError) throw new Error(`画像アップロード失敗: ${uploadError.message}`);
 
-      // 公開URLを取得
+      // 公開URLの取得
       const { data: publicUrlData } = supabase.storage
         .from('photos')
         .getPublicUrl(filePath);
 
       const photoUrl = publicUrlData.publicUrl;
 
-      // 3. DB (reports テーブル) にインサート
+      // 2. reports テーブルへのデータ挿入
       const { error: dbError } = await supabase.from('reports').insert({
-        user_id: user.id,
-        store_id: storeId ?? null,
-        gachapon_id: gachaponId ?? null,
-        item_id: itemId ?? null,
-        buytime: new Date().toISOString(),
-        photo_url: photoUrl,
-        stock_status: stockStatus,
+        user_id: user.id,               // uuid (FK)
+        store_id: selectedStore.id,     // uuid (FK)
+        gachapon_id: selectedGachapon.id, // uuid (FK)
+        item_id: selectedItem?.id ?? null, // uuid (FK, 任意)
+        buytime: new Date().toISOString(), // timestamp
+        photo_url: photoUrl,            // string
+        stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 余裕あり)
       });
 
       if (dbError) throw new Error(`DB保存失敗: ${dbError.message}`);
 
       Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
-  {
-    text: 'OK',
-    onPress: () => {
-      // post.tsx へ遷移（戻るボタンで投稿画面に戻らせたくない場合は replace）
-      router.replace('/post');
-    },
-  },
-]);
+        {
+          text: 'OK',
+          onPress: () => router.replace('/post'),
+        },
+      ]);
     } catch (error: any) {
-      console.error(error);
+      console.error('レポート投稿エラー:', error);
       Alert.alert('投稿エラー', error.message || '投稿に失敗しました。');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <View style={styles.safeArea}>
-      {/* 1. ヘッダー */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="close" size={26} color="#A0522D" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gashapon Explorer</Text>
-        <TouchableOpacity>
-          <Ionicons name="help-circle-outline" size={26} color="#A0522D" />
-        </TouchableOpacity>
+  // モーダルで項目選択時
+  const handleSelectModalItem = (rawItem: StoreItem | GachaponItem | ItemType) => {
+    if (modalType === 'store') setSelectedStore(rawItem as StoreItem);
+    if (modalType === 'gachapon') setSelectedGachapon(rawItem as GachaponItem);
+    if (modalType === 'item') setSelectedItem(rawItem as ItemType);
+    setModalType(null);
+  };
+
+  const getModalData = (): ModalOptionItem[] => {
+    if (modalType === 'store') return stores.map((s) => ({ id: s.id, name: s.name, raw: s }));
+    if (modalType === 'gachapon') return gachapons.map((g) => ({ id: g.id, name: g.name, raw: g }));
+    if (modalType === 'item') return items.map((i) => ({ id: i.id, name: i.name, raw: i }));
+    return [];
+  };
+
+  if (fetching) {
+    return (
+      <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#FF6F00" />
       </View>
+    );
+  }
 
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {/* 2. タブ切り替え（在庫報告 / マッチング） */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'report' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('report')}
-          >
-            <Text style={[styles.tabText, activeTab === 'report' && styles.tabTextActive]}>
-              在庫報告
-            </Text>
+  return (
+    <KeyboardAvoidingView
+      style={styles.safeArea}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+
+      {/* スクロール可能なコンテンツエリア */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 150,
+        }}
+      >
+
+        {/* 投稿情報選択 */}
+        <Text style={styles.sectionTitle}>投稿情報の選択</Text>
+        <View style={styles.selectGroup}>
+          <TouchableOpacity style={styles.selectCard} onPress={() => setModalType('store')}>
+            <View style={styles.selectCardLeft}>
+              <Ionicons name="location" size={20} color="#9E4D00" />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={styles.selectLabel}>対象店舗 <Text style={styles.requiredMark}>*</Text></Text>
+                <Text style={styles.selectValue} numberOfLines={1}>
+                  {selectedStore ? selectedStore.name : '店舗を選択してください'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'matching' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('matching')}
-          >
-            <Text style={[styles.tabText, activeTab === 'matching' && styles.tabTextActive]}>
-              マッチング
-            </Text>
+
+          <TouchableOpacity style={styles.selectCard} onPress={() => setModalType('gachapon')}>
+            <View style={styles.selectCardLeft}>
+              <Ionicons name="hardware-chip-outline" size={20} color="#9E4D00" />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={styles.selectLabel}>ガチャガチャ（商品名） <Text style={styles.requiredMark}>*</Text></Text>
+                <Text style={styles.selectValue} numberOfLines={1}>
+                  {selectedGachapon ? selectedGachapon.name : '商品を選択してください'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.selectCard} onPress={() => setModalType('item')}>
+            <View style={styles.selectCardLeft}>
+              <Ionicons name="gift-outline" size={20} color="#9E4D00" />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={styles.selectLabel}>出たアイテム（任意）</Text>
+                <Text style={styles.selectValue} numberOfLines={1}>
+                  {selectedItem ? selectedItem.name : '出た種類を選択してください'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#999" />
           </TouchableOpacity>
         </View>
 
-        {/* 3. チェックイン中の店舗カード */}
-        <View style={styles.storeCard}>
-          <View style={styles.storeHeader}>
-            <Ionicons name="location" size={18} color="#9E4D00" />
-            <Text style={styles.storeLabel}>現在チェックイン中の店舗</Text>
-          </View>
-          <Text style={styles.storeName}>
-            ガシャポンバンダイオフィシャルショップ{'\n'}池袋サンシャインシティ店
-          </Text>
-        </View>
-
-        {/* 4. プレイ証明の撮影エリア */}
-        <View style={styles.sectionHeader}>
+        {/* 撮影エリア */}
+        <View style={[styles.sectionHeader, { marginTop: 16 }]}>
           <Text style={styles.sectionTitle}>プレイ証明の撮影</Text>
           <View style={styles.requiredBadge}>
             <Text style={styles.requiredText}>必須</Text>
@@ -191,18 +308,9 @@ export default function ReportCreateScreen() {
           )}
         </TouchableOpacity>
 
-        {/* 5. セキュリティ注意事項 */}
-        <View style={styles.securityBox}>
-          <Ionicons name="shield-outline" size={20} color="#9E4D00" style={{ marginTop: 2 }} />
-          <Text style={styles.securityText}>
-            セキュリティのため、現在の場所と時間が記録されます。不正な投稿はアカウント凍結の対象となる場合があります。
-          </Text>
-        </View>
-
-        {/* 6. 在庫状況選択（ボタン） */}
+        {/* 在庫状況選択 */}
         <Text style={[styles.sectionTitle, { marginTop: 20 }]}>現在の在庫状況</Text>
         <View style={styles.stockGroup}>
-          {/* 在庫あり (2) */}
           <TouchableOpacity
             style={[styles.stockCard, stockStatus === 2 && styles.stockCardSelected]}
             onPress={() => setStockStatus(2)}
@@ -211,7 +319,6 @@ export default function ReportCreateScreen() {
             <Text style={styles.stockText}>在庫あり</Text>
           </TouchableOpacity>
 
-          {/* 残りわずか (1) */}
           <TouchableOpacity
             style={[styles.stockCard, stockStatus === 1 && styles.stockCardSelected]}
             onPress={() => setStockStatus(1)}
@@ -220,7 +327,6 @@ export default function ReportCreateScreen() {
             <Text style={styles.stockText}>残りわずか</Text>
           </TouchableOpacity>
 
-          {/* 売り切れ (0) */}
           <TouchableOpacity
             style={[styles.stockCard, stockStatus === 0 && styles.stockCardSelected]}
             onPress={() => setStockStatus(0)}
@@ -230,7 +336,7 @@ export default function ReportCreateScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 7. 投稿ボタン */}
+        {/* 投稿ボタン */}
         <View style={styles.submitArea}>
           {loading ? (
             <ActivityIndicator size="large" color="#FF6F00" />
@@ -242,7 +348,38 @@ export default function ReportCreateScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+
+      {/* 選択モーダル */}
+      <Modal visible={modalType !== null} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {modalType === 'store' && '店舗の選択'}
+                {modalType === 'gachapon' && 'ガチャガチャ（商品）の選択'}
+                {modalType === 'item' && '出たアイテムの選択'}
+              </Text>
+              <TouchableOpacity onPress={() => setModalType(null)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList<ModalOptionItem>
+              data={getModalData()}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => handleSelectModalItem(item.raw)}
+                >
+                  <Text style={styles.modalItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -250,86 +387,51 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FAFAFA',
-    paddingTop: 40,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#E0E0E0',
-    backgroundColor: '#FFF',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#8B4513',
-  },
-  container: {
-    padding: 16,
-  },
-  /* タブ */
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#EAEAEA',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: '#9E4D00',
-  },
-  tabText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  tabTextActive: {
-    color: '#FFF',
-  },
-  /* 店舗カード */
-  storeCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
-    marginBottom: 20,
-  },
-  storeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  storeLabel: {
-    fontSize: 12,
-    color: '#888',
-    marginLeft: 4,
-  },
-  storeName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    lineHeight: 22,
-  },
-  /* 撮影エリア */
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+    paddingTop: 30,
   },
   sectionTitle: {
     fontSize: 14,
     color: '#555',
     fontWeight: '600',
+    marginBottom: 8,
+  },
+  requiredMark: {
+    color: '#D32F2F',
+    fontWeight: 'bold',
+  },
+  selectGroup: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  selectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    borderRadius: 12,
+    padding: 12,
+  },
+  selectCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectLabel: {
+    fontSize: 11,
+    color: '#888',
+  },
+  selectValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   requiredBadge: {
     backgroundColor: '#FFEBEE',
@@ -383,22 +485,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#777',
   },
-  /* セキュリティ注記 */
-  securityBox: {
-    flexDirection: 'row',
-    backgroundColor: '#F5F5F5',
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  securityText: {
-    flex: 1,
-    fontSize: 11,
-    color: '#666',
-    lineHeight: 16,
-  },
-  /* 在庫ボタン */
   stockGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -424,7 +510,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginTop: 8,
   },
-  /* 投稿ボタン */
   submitArea: {
     marginTop: 28,
     marginBottom: 20,
@@ -446,5 +531,39 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalItem: {
+    paddingVertical: 16,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#EFEFEF',
+  },
+  modalItemText: {
+    fontSize: 15,
+    color: '#333',
   },
 });
