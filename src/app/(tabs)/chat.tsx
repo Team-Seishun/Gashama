@@ -44,22 +44,49 @@ export default function ChatListScreen() {
             // 最新のメッセージを1件取得
             const { data: messagesData } = await supabase
               .from('chat_messages')
-              .select('message, created_at')
+              .select('message, image_url, created_at')
               .eq('room_id', room.id)
               .order('created_at', { ascending: false })
               .limit(1);
 
+            let latestMessageText = 'まだメッセージはありません';
+            if (messagesData && messagesData.length > 0) {
+              const msg = messagesData[0];
+              if (msg.message) {
+                latestMessageText = msg.message;
+              } else if (msg.image_url) {
+                latestMessageText = '写真を送信しました';
+              }
+            }
+            
+            // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
+            const { count: unreadCount } = await supabase
+              .from('chat_messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('room_id', room.id)
+              .eq('is_read', false)
+              .neq('sender_id', userId);
+
             return {
               ...room,
               partner: partnerData || null,
-              latestMessage: messagesData && messagesData.length > 0 ? messagesData[0].message : 'まだメッセージはありません',
+              latestMessage: latestMessageText,
               latestMessageTime: messagesData && messagesData.length > 0 ? messagesData[0].created_at : room.created_at,
+              unreadCount: unreadCount || 0,
             } as ChatRoomWithPartner;
           })
         );
 
-        // 最新メッセージの日時でソート
+        // 未読メッセージがあるものを優先し、その中で最新メッセージ順にソート
         roomsWithDetails.sort((a, b) => {
+          const aHasUnread = (a.unreadCount || 0) > 0;
+          const bHasUnread = (b.unreadCount || 0) > 0;
+
+          // 片方だけ未読がある場合は未読を上にする
+          if (aHasUnread && !bHasUnread) return -1;
+          if (!aHasUnread && bHasUnread) return 1;
+
+          // どちらも未読、またはどちらも既読の場合は日時でソート
           const timeA = new Date(a.latestMessageTime || 0).getTime();
           const timeB = new Date(b.latestMessageTime || 0).getTime();
           return timeB - timeA;
@@ -102,26 +129,49 @@ export default function ChatListScreen() {
     return (
       <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item.id)}>
         <View style={styles.avatarContainer}>
-          {item.partner?.icon_image && item.partner.icon_image.startsWith('http') ? (
-            <Image source={{ uri: item.partner.icon_image }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: '#E1F5FE' }]}>
-              <Ionicons name="person" size={24} color="#007AFF" />
+          <Image 
+            source={{ uri: `https://picsum.photos/seed/${item.id}_request/100/100` }} 
+            style={styles.avatar} 
+            contentFit="cover" 
+          />
+          {!!item.unreadCount && item.unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
             </View>
           )}
         </View>
         
         <View style={styles.chatInfo}>
           <View style={styles.chatHeader}>
-            <Text style={styles.userName}>{item.partner?.nickname || '名無しさん'}</Text>
+            <View style={styles.tradeTitleContainer}>
+              <View style={styles.badgeOffer}><Text style={styles.badgeText}>出</Text></View>
+              <Text style={styles.tradeTitleItem} numberOfLines={1}>アメ A</Text>
+              
+              <Ionicons name="swap-horizontal" size={14} color="#D95C14" style={{ marginHorizontal: 4 }} />
+              
+              <View style={styles.badgeRequest}><Text style={styles.badgeText}>求</Text></View>
+              <Text style={styles.tradeTitleItem} numberOfLines={1}>ビーフ</Text>
+            </View>
             <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          
+          {/* 2行目: ガチャポン名と相手のユーザー名 (現在はモック表示) */}
+          <View style={styles.tradeSummaryRow}>
+            <View style={styles.gachaponTag}>
+              <Ionicons name="cube" size={12} color="#FF7A00" style={{ marginRight: 4 }} />
+              <Text style={styles.gachaponName} numberOfLines={1}>ちいかわ (ハチワレ)</Text>
+            </View>
+            <Text style={{ color: '#E0E0E0', marginHorizontal: 6 }}>|</Text>
+            <Ionicons name="person-circle" size={14} color="#007AFF" style={{ marginRight: 2 }} />
+            <Text style={styles.partnerName} numberOfLines={1}>{item.partner?.nickname || '名無しさん'}</Text>
+          </View>
+          
+          <View style={styles.messageRow}>
             {isSystemMessage && (
               <Ionicons name="information-circle" size={14} color="#999" style={{ marginRight: 4 }} />
             )}
             <Text 
-              style={[styles.messageText, isSystemMessage && { color: '#999', fontStyle: 'italic', flex: 1 }]} 
+              style={[styles.messageText, isSystemMessage && styles.systemMessageText]} 
               numberOfLines={1}
             >
               {displayMessage}
@@ -185,7 +235,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 100, // タブバーの高さ分を考慮して余白を増やす
   },
   chatListItem: {
     flexDirection: 'row',
@@ -201,11 +251,32 @@ const styles = StyleSheet.create({
   avatar: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FAFAFA',
+  },
+  unreadBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   chatInfo: {
     flex: 1,
@@ -217,14 +288,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  userName: {
-    fontSize: 16,
+  tradeTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  tradeTitleItem: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
+    flexShrink: 1,
+  },
+  badgeOffer: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  badgeRequest: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  badgeText: {
+    fontSize: 9,
+    color: '#fff',
+    fontWeight: 'bold',
   },
   timeText: {
     fontSize: 12,
     color: '#999',
+  },
+  tradeSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  gachaponTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gachaponName: {
+    fontSize: 11,
+    color: '#D95C14',
+    fontWeight: 'bold',
+    flexShrink: 1,
+  },
+  partnerName: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+    flexShrink: 2,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  systemMessageText: {
+    color: '#999',
+    fontStyle: 'italic',
+    flex: 1,
   },
   messageText: {
     fontSize: 14,
