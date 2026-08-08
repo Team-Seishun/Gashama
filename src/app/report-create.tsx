@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -67,6 +67,27 @@ export default function ReportCreateScreen() {
     gachaponId: paramGachaponId,
     itemId: paramItemId,
   });
+
+  const [gachaponItems, setGachaponItems] = useState<ItemType[]>([]);
+
+  // ガチャガチャが選択されたらその中身を取得する
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedGachapon) {
+      supabase
+        .from('gachapon_items')
+        .select('id, name')
+        .eq('gachapon_id', selectedGachapon.id)
+        .then((res) => {
+          if (isMounted && res.data) {
+            setGachaponItems(res.data);
+          }
+        });
+    } else {
+      setGachaponItems([]);
+    }
+    return () => { isMounted = false; };
+  }, [selectedGachapon]);
 
   // モーダルの開閉状態
   const [modalType, setModalType] = useState<SearchMasterMode | null>(null);
@@ -200,7 +221,6 @@ export default function ReportCreateScreen() {
   const handleSelectSearchResult = (result: SearchResult) => {
     if (result.type === 'store') setSelectedStore(result.raw);
     if (result.type === 'gachapon') setSelectedGachapon(result.raw);
-    if (result.type === 'item') setSelectedItem(result.raw);
     setModalType(null);
   };
 
@@ -268,18 +288,33 @@ export default function ReportCreateScreen() {
             <Ionicons name="chevron-forward" size={18} color="#999" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.selectCard} onPress={() => setModalType('item')}>
-            <View style={styles.selectCardLeft}>
+          {/* 出たアイテム（吹き出し選択） */}
+          <View style={styles.chipSection}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="gift-outline" size={20} color="#9E4D00" />
-              <View style={{ marginLeft: 10, flex: 1 }}>
-                <Text style={styles.selectLabel}>出たアイテム（任意）</Text>
-                <Text style={styles.selectValue} numberOfLines={1}>
-                  {selectedItem ? selectedItem.name : '出た種類を選択してください'}
-                </Text>
-              </View>
+              <Text style={[styles.selectLabel, { marginLeft: 8 }]}>出たアイテム（任意）</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#999" />
-          </TouchableOpacity>
+            
+            {!selectedGachapon ? (
+              <Text style={styles.chipHint}>※先にガチャガチャ（商品名）を選択してください</Text>
+            ) : gachaponItems.length === 0 ? (
+              <Text style={styles.chipHint}>登録されているアイテム情報がありません</Text>
+            ) : (
+              <View style={styles.chipContainer}>
+                {gachaponItems.map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.chip, selectedItem?.id === item.id && styles.chipSelected]}
+                    onPress={() => setSelectedItem(selectedItem?.id === item.id ? null : item)}
+                  >
+                    <Text style={[styles.chipText, selectedItem?.id === item.id && styles.chipTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* 撮影エリア */}
@@ -403,6 +438,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginTop: 2,
+  },
+  chipSection: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    borderRadius: 12,
+    padding: 12,
+  },
+  chipHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 12,
+    marginLeft: 4,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipSelected: {
+    backgroundColor: '#FFF8F5',
+    borderColor: '#FF6F00',
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#333',
+  },
+  chipTextSelected: {
+    color: '#FF6F00',
+    fontWeight: 'bold',
   },
   sectionHeader: {
     flexDirection: 'row',
