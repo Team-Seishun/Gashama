@@ -11,7 +11,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    // windowが存在する環境（ブラウザ）のみAsyncStorageを使用する設定に変更
+    storage: typeof window !== 'undefined' ? AsyncStorage : undefined,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

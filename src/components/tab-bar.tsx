@@ -94,7 +94,7 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
             style={styles.tabItem}
           >
             <View style={[styles.iconContainer, isFocused && styles.activeIconContainer]}>
-              <Feather name={iconName as 'map' | 'plus-square' | 'camera' | 'message-circle' | 'user' | 'help-circle'} size={24} color="#333" />
+              <Feather name={iconName as 'map' | 'plus-square' | 'camera' | 'message-circle' | 'user' | 'repeat' | 'help-circle'} size={24} color="#333" />
               {route.name === 'chat' && totalUnreadCount > 0 && (
                 <View style={styles.tabBadge}>
                   <Text style={styles.tabBadgeText}>{totalUnreadCount}</Text>

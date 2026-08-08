@@ -1,19 +1,19 @@
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
-import { PROFILE_ICON_OPTIONS, getProfileIconSource } from '@/features/profile/profile-icons';
 import { useProfileContext } from '@/features/profile/contexts/ProfileContext';
+import { PROFILE_ICON_OPTIONS, getProfileIconSource } from '@/features/profile/profile-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
