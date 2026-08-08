@@ -10,6 +10,7 @@ import { profileApi } from '@/features/profile/api/api';
 import { ProfileContext } from '@/features/profile/contexts/ProfileContext';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -113,16 +114,18 @@ export default function TabLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <ProfileContext.Provider value={{
-          hasProfile: profileState.hasProfile,
-          setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
-        }}>
-          <AnimatedSplashOverlay />
-          <Stack screenOptions={{ headerShown: false }} />
-        </ProfileContext.Provider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <ProfileContext.Provider value={{
+            hasProfile: profileState.hasProfile,
+            setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
+          }}>
+            <AnimatedSplashOverlay />
+            <Stack screenOptions={{ headerShown: false }} />
+          </ProfileContext.Provider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
