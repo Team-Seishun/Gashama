@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -9,11 +9,35 @@ import {
   ScrollView, 
   KeyboardAvoidingView, 
   Platform, 
-  SafeAreaView,
   Modal,
   ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+
+const CHAT_COLORS = {
+  primary: '#FF7A00',
+  primaryDisabled: '#FFB870',
+  primaryLight: '#FFF3E0',
+  textMain: '#333',
+  textSub: '#666',
+  textMuted: '#999',
+  background: '#fff',
+  backgroundSub: '#FAFAFA',
+  backgroundBadge: '#F5F5F5',
+  border: '#F0F0F0',
+  borderDark: '#E0E0E0',
+  accentBlue: '#007AFF',
+  accentBlueLight: '#E1F5FE',
+  accentBrown: '#8D6E63',
+  accentBrownDisabled: '#A1887F',
+  waitingOrange: '#D95C14'
+};
+
+const CONSTANTS = {
+  MOCK_LOADING_TIME: 1000,
+  MAX_COMMENT_LENGTH: 1000,
+};
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -32,6 +56,24 @@ export default function ChatRoomScreen() {
   // ローディング状態 (モック用)
   const [isApproving, setIsApproving] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
+
+  // 承認ハンドラ
+  const handleApprove = useCallback(() => {
+    setIsApproving(true);
+    setTimeout(() => {
+      setIsApproving(false);
+      setIsApproved(true);
+    }, CONSTANTS.MOCK_LOADING_TIME);
+  }, []);
+
+  // 評価送信ハンドラ
+  const handleSubmitReview = useCallback(() => {
+    setIsReviewSubmitting(true);
+    setTimeout(() => {
+      setIsReviewSubmitting(false);
+      setIsReviewModalVisible(false);
+    }, CONSTANTS.MOCK_LOADING_TIME);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -74,13 +116,7 @@ export default function ChatRoomScreen() {
                   <TouchableOpacity 
                     style={[styles.actionButton, styles.approveButton, isApproving && styles.approveButtonDisabled]}
                     disabled={isApproving}
-                    onPress={() => {
-                      setIsApproving(true);
-                      setTimeout(() => {
-                        setIsApproving(false);
-                        setIsApproved(true);
-                      }, 1000); // 1秒間の疑似ローディング
-                    }}
+                    onPress={handleApprove}
                   >
                     {isApproving ? (
                       <ActivityIndicator size="small" color="#fff" />
@@ -122,7 +158,7 @@ export default function ChatRoomScreen() {
 
               {/* メッセージ 1 (相手) */}
               <View style={[styles.messageRow, styles.messageRowLeft]}>
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E1F5FE' }]}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: CHAT_COLORS.accentBlueLight }]}>
                   <Ionicons name="person" size={16} color="#007AFF" />
                 </View>
                 <View style={styles.messageBubbleLeft}>
@@ -145,7 +181,7 @@ export default function ChatRoomScreen() {
 
               {/* メッセージ 3 (相手) */}
               <View style={[styles.messageRow, styles.messageRowLeft]}>
-                <View style={[styles.avatarPlaceholder, { backgroundColor: '#E1F5FE' }]}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: CHAT_COLORS.accentBlueLight }]}>
                   <Ionicons name="person" size={16} color="#007AFF" />
                 </View>
                 <View style={styles.messageBubbleLeft}>
@@ -233,7 +269,7 @@ export default function ChatRoomScreen() {
                 style={[styles.ratingButton, rating === 'good' && styles.ratingButtonActive]}
                 onPress={() => setRating('good')}
               >
-                <Ionicons name="happy" size={48} color={rating === 'good' ? '#FF7A00' : '#A0A0A0'} />
+                <Ionicons name="happy" size={48} color={rating === 'good' ? CHAT_COLORS.primary : '#A0A0A0'} />
                 <Text style={[styles.ratingButtonText, rating === 'good' && styles.ratingButtonTextActive]}>良かった</Text>
               </TouchableOpacity>
               
@@ -241,7 +277,7 @@ export default function ChatRoomScreen() {
                 style={[styles.ratingButton, rating === 'bad' && styles.ratingButtonActive]}
                 onPress={() => setRating('bad')}
               >
-                <Ionicons name="sad" size={48} color={rating === 'bad' ? '#8D6E63' : '#A0A0A0'} />
+                <Ionicons name="sad" size={48} color={rating === 'bad' ? CHAT_COLORS.accentBrown : '#A0A0A0'} />
                 <Text style={[styles.ratingButtonText, rating === 'bad' && styles.ratingButtonTextActive]}>残念だった</Text>
               </TouchableOpacity>
             </View>
@@ -250,14 +286,14 @@ export default function ChatRoomScreen() {
             <View style={styles.commentSection}>
               <View style={styles.commentHeader}>
                 <Text style={styles.commentLabel}>コメント (任意)</Text>
-                <Text style={styles.commentCounter}>{reviewComment.length}/1000</Text>
+                <Text style={styles.commentCounter}>{reviewComment.length}/{CONSTANTS.MAX_COMMENT_LENGTH}</Text>
               </View>
               <TextInput
                 style={styles.commentInput}
                 placeholder="取引の感想を入力してください"
                 placeholderTextColor="#999"
                 multiline
-                maxLength={1000}
+                maxLength={CONSTANTS.MAX_COMMENT_LENGTH}
                 value={reviewComment}
                 onChangeText={setReviewComment}
                 textAlignVertical="top"
@@ -278,14 +314,7 @@ export default function ChatRoomScreen() {
             <TouchableOpacity 
               style={[styles.submitReviewButton, isReviewSubmitting && styles.submitReviewButtonDisabled]}
               disabled={isReviewSubmitting}
-              onPress={() => {
-                // 送信処理（モック）
-                setIsReviewSubmitting(true);
-                setTimeout(() => {
-                  setIsReviewSubmitting(false);
-                  setIsReviewModalVisible(false);
-                }, 1000);
-              }}
+              onPress={handleSubmitReview}
             >
               {isReviewSubmitting ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -307,11 +336,11 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: CHAT_COLORS.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: CHAT_COLORS.background,
   },
   // ヘッダー
   header: {
@@ -321,7 +350,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: CHAT_COLORS.border,
   },
   backButton: {
     padding: 4,
@@ -333,7 +362,7 @@ const styles = StyleSheet.create({
   headerImagePlaceholder: {
     width: 24,
     height: 24,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
@@ -342,10 +371,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   completeButton: {
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -353,7 +382,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   completeButtonText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -372,23 +401,23 @@ const styles = StyleSheet.create({
   },
   waitingText: {
     fontSize: 16,
-    color: '#333',
+    color: CHAT_COLORS.textMain,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   subText: {
     fontSize: 14,
-    color: '#666',
+    color: CHAT_COLORS.textSub,
     marginBottom: 24,
   },
   testApproveButton: {
-    backgroundColor: '#333',
+    backgroundColor: CHAT_COLORS.textMain,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
   },
   testApproveButtonText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontWeight: 'bold',
   },
   actionButtonsRow: {
@@ -403,21 +432,21 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   approveButton: {
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
   },
   approveButtonDisabled: {
-    backgroundColor: '#FFB870',
+    backgroundColor: CHAT_COLORS.primaryDisabled,
   },
   approveButtonText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontWeight: 'bold',
     fontSize: 15,
   },
   rejectButton: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
   },
   rejectButtonText: {
-    color: '#666',
+    color: CHAT_COLORS.textSub,
     fontWeight: 'bold',
     fontSize: 15,
   },
@@ -428,7 +457,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   approvedBadge: {
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -437,13 +466,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   approvedBadgeText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontSize: 14,
     fontWeight: 'bold',
   },
   dateText: {
     fontSize: 12,
-    color: '#999',
+    color: CHAT_COLORS.textMuted,
   },
 
   // メッセージ
@@ -467,7 +496,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   messageBubbleLeft: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     padding: 12,
     borderRadius: 16,
     borderBottomLeftRadius: 4,
@@ -475,7 +504,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   messageBubbleRight: {
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     padding: 12,
     borderRadius: 16,
     borderBottomRightRadius: 4,
@@ -483,17 +512,17 @@ const styles = StyleSheet.create({
   },
   messageTextLeft: {
     fontSize: 14,
-    color: '#333',
+    color: CHAT_COLORS.textMain,
     lineHeight: 20,
   },
   messageTextRight: {
     fontSize: 14,
-    color: '#fff',
+    color: CHAT_COLORS.background,
     lineHeight: 20,
   },
   timeText: {
     fontSize: 11,
-    color: '#999',
+    color: CHAT_COLORS.textMuted,
     marginBottom: 4,
   },
 
@@ -502,24 +531,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: CHAT_COLORS.border,
   },
   quickReplyScroll: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   quickReplyBadge: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: CHAT_COLORS.borderDark,
   },
   quickReplyText: {
     fontSize: 13,
-    color: '#666',
+    color: CHAT_COLORS.textSub,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -532,27 +561,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: CHAT_COLORS.borderDark,
     height: 40,
   },
   inputWrapperDisabled: {
-    backgroundColor: '#FAFAFA',
-    borderColor: '#F0F0F0',
+    backgroundColor: CHAT_COLORS.backgroundSub,
+    borderColor: CHAT_COLORS.border,
   },
   textInput: {
     flex: 1,
     paddingHorizontal: 16,
     fontSize: 14,
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   sendButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 12,
@@ -564,7 +593,7 @@ const styles = StyleSheet.create({
   // 評価モーダル
   modalSafeArea: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: CHAT_COLORS.backgroundSub,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -573,8 +602,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    backgroundColor: '#fff',
+    borderBottomColor: CHAT_COLORS.border,
+    backgroundColor: CHAT_COLORS.background,
   },
   modalCloseButton: {
     padding: 4,
@@ -582,7 +611,7 @@ const styles = StyleSheet.create({
   modalHeaderTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   modalContent: {
     padding: 24,
@@ -600,34 +629,34 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#E1F5FE',
+    backgroundColor: CHAT_COLORS.accentBlueLight,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FF7A00',
+    borderColor: CHAT_COLORS.primary,
   },
   modalAvatarBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#D95C14',
+    backgroundColor: CHAT_COLORS.waitingOrange,
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: CHAT_COLORS.background,
   },
   modalUserName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
     marginBottom: 8,
   },
   modalGreeting: {
     fontSize: 15,
-    color: '#666',
+    color: CHAT_COLORS.textSub,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -638,7 +667,7 @@ const styles = StyleSheet.create({
   },
   ratingButton: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     borderRadius: 16,
     paddingVertical: 24,
     alignItems: 'center',
@@ -647,17 +676,17 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   ratingButtonActive: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primaryLight,
+    borderColor: CHAT_COLORS.primary,
   },
   ratingButtonText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#666',
+    color: CHAT_COLORS.textSub,
   },
   ratingButtonTextActive: {
-    color: '#FF7A00',
+    color: CHAT_COLORS.primary,
   },
   commentSection: {
     marginBottom: 24,
@@ -670,41 +699,41 @@ const styles = StyleSheet.create({
   commentLabel: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   commentCounter: {
     fontSize: 12,
-    color: '#999',
+    color: CHAT_COLORS.textMuted,
   },
   commentInput: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     borderRadius: 16,
     padding: 16,
     height: 120,
     fontSize: 15,
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   warningBox: {
     flexDirection: 'row',
-    backgroundColor: '#FFF3E0',
+    backgroundColor: CHAT_COLORS.primaryLight,
     borderRadius: 12,
     padding: 16,
   },
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: '#D95C14',
+    color: CHAT_COLORS.waitingOrange,
     lineHeight: 20,
   },
   modalFooter: {
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    backgroundColor: '#fff',
+    backgroundColor: CHAT_COLORS.background,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: CHAT_COLORS.border,
   },
   submitReviewButton: {
-    backgroundColor: '#8D6E63',
+    backgroundColor: CHAT_COLORS.accentBrown,
     borderRadius: 25,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -712,10 +741,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitReviewButtonDisabled: {
-    backgroundColor: '#A1887F',
+    backgroundColor: CHAT_COLORS.accentBrownDisabled,
   },
   submitReviewButtonText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontSize: 16,
     fontWeight: 'bold',
   },
