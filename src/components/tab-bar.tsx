@@ -39,7 +39,14 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
       .channel('public:chat_messages')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'chat_messages' },
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        () => {
+          fetchUnreadCount();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
         () => {
           fetchUnreadCount();
         }
