@@ -38,7 +38,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "プロフィールアイコンを設定するために写真ライブラリへのアクセスを許可してください。"
+          "cameraPermission": "レポート作成のためにカメラへのアクセスを許可してください。"
         }
       ],
       "expo-image",
