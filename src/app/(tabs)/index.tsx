@@ -79,13 +79,7 @@ export default function MapScreen() {
     if (storeId && gashaponLocations.length > 0) {
       const store = gashaponLocations.find((loc) => loc.id === storeId);
       if (store) {
-        handleMarkerPress(store);
-        mapRef.current?.animateToRegion({
-          latitude: store.latitude,
-          longitude: store.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
+        handleMarkerPress(store, 500);
       }
     }
   }, [storeId, gashaponLocations]);
@@ -175,11 +169,19 @@ export default function MapScreen() {
           let lat = 0;
           let lng = 0;
           if (store.location) {
-            // ユーザーのDB入力形式に合わせる: "(lat,lng)"
+            // DBの入力形式が "(lat,lng)" または "(lng,lat)" と混在しているため、値の大きさで判定する
+            // 日本の座標（Lat: 35前後, Lng: 136前後）を前提とし、大きい方をLngとする
             const match = store.location.match(/\(([^,]+),([^)]+)\)/);
             if (match) {
-              lat = parseFloat(match[1]);
-              lng = parseFloat(match[2]);
+              const val1 = parseFloat(match[1]);
+              const val2 = parseFloat(match[2]);
+              if (val1 > val2) {
+                lng = val1;
+                lat = val2;
+              } else {
+                lat = val1;
+                lng = val2;
+              }
             }
           }
           return {
@@ -266,9 +268,19 @@ export default function MapScreen() {
   }, [selectedLocation]);
 
   // マーカータップ時の処理
-  function handleMarkerPress(loc: LocationData) {
+  function handleMarkerPress(loc: LocationData, delay = 100) {
     setSelectedLocation(loc);
     bottomSheetRef.current?.expand(); // シートを引き出す
+
+    // ボトムシートが画面の下半分(約70%)を覆うため、ピンが上部に見えるようにマップの中心を少し南（マイナス方向）にずらす
+    setTimeout(() => {
+      mapRef.current?.animateToRegion({
+        latitude: loc.latitude - 0.004, // オフセット値を調整（さらに南へずらす）
+        longitude: loc.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500);
+    }, delay);
   }
 
   return (

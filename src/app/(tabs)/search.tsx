@@ -1,8 +1,9 @@
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SearchResult = {
   type: 'store' | 'gachapon';
@@ -16,6 +17,15 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    // Androidでのオートフォーカスバグと、画面遷移中のフォーカス消失を防ぐため遅延フォーカス
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,10 +93,11 @@ export default function SearchScreen() {
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
           <TextInput
+            ref={inputRef}
             style={styles.searchInput}
             placeholder="店舗名、場所で検索..."
             placeholderTextColor="#999"
-            autoFocus={true}
+            autoFocus={false}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
@@ -103,6 +114,7 @@ export default function SearchScreen() {
 
       <FlatList
         data={results}
+        keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.id}
         initialNumToRender={10}
         windowSize={5}
@@ -171,6 +183,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#333',
+    paddingVertical: 0,
+    height: '100%',
   },
   resultItem: {
     flexDirection: 'row',
