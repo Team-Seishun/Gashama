@@ -11,4 +11,7 @@ export const authApi = {
   signOut: async () => {
     return await supabase.auth.signOut();
   },
+  updatePassword: async (password: string) => {
+    return await supabase.auth.updateUser({ password });
+  },
 };

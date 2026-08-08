@@ -1,4 +1,5 @@
-import { Modal, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { Modal, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Image } from 'expo-image';
