@@ -44,7 +44,7 @@ export default function CameraScreen() {
             const capturedFileName = result.assets[0].fileName;
             const capturedMimeType = result.assets[0].mimeType;
             router.replace({
-              pathname: '/report-create',
+              pathname: '/report-create' as any,
               // URIを安全にパラメータとして渡すためにエンコードする
               params: {
                 imageUri: encodeURIComponent(capturedUri),

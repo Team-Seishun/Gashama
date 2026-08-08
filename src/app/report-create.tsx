@@ -15,12 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
-
-// DBの型定義 (IDをすべて id に統一)
-type StoreItem = { id: string; name: string };
-type GachaponItem = { id: string; name: string };
-type ItemType = { id: string; name: string };
 
 // モーダル選択用共通型
 type ModalOptionItem = {
@@ -57,82 +53,35 @@ export default function ReportCreateScreen() {
   const imageFileName = parseParam(params.imageFileName);
   const imageMimeType = parseParam(params.imageMimeType);
 
-  // DBから取得したマスターデータ一覧
-  const [stores, setStores] = useState<StoreItem[]>([]);
-  const [gachapons, setGachapons] = useState<GachaponItem[]>([]);
-  const [items, setItems] = useState<ItemType[]>([]);
-  const [fetching, setFetching] = useState<boolean>(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const paramStoreId = parseParam(params.storeId);
+  const paramGachaponId = parseParam(params.gachaponId);
+  const paramItemId = parseParam(params.itemId);
 
-  // 選択中の状態（State）
-  const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
-  const [selectedGachapon, setSelectedGachapon] = useState<GachaponItem | null>(null);
-  const [selectedItem, setSelectedItem] = useState<ItemType | null>(null);
+  // カスタムフックでマスターデータを取得・管理
+  const {
+    stores,
+    gachapons,
+    items,
+    fetching,
+    loadError,
+    selectedStore,
+    setSelectedStore,
+    selectedGachapon,
+    setSelectedGachapon,
+    selectedItem,
+    setSelectedItem,
+    fetchMasterData,
+  } = useMasterData({
+    storeId: paramStoreId,
+    gachaponId: paramGachaponId,
+    itemId: paramItemId,
+  });
 
   // モーダルの開閉状態
   const [modalType, setModalType] = useState<'store' | 'gachapon' | 'item' | null>(null);
 
   const [stockStatus, setStockStatus] = useState<number>(2); // 2: 在庫あり, 1: 残りわずか, 0: 売り切れ
   const [loading, setLoading] = useState(false);
-
-  // ----------------------------------------------------
-  // Supabase からマスターデータを取得
-  // ----------------------------------------------------
-  const fetchMasterData = async () => {
-    try {
-      setFetching(true);
-      setLoadError(null);
-
-      const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
-        supabase.from('stores').select('id, name'),
-        supabase.from('gachapons').select('id, name'),
-        supabase.from('gachapon_items').select('id, name'),
-      ]);
-
-      if (storesRes.error) throw storesRes.error;
-      if (gachaponsRes.error) throw gachaponsRes.error;
-      if (itemsRes.error) throw itemsRes.error;
-
-      const storeData = storesRes.data || [];
-      const gachaponData = gachaponsRes.data || [];
-      const itemData = itemsRes.data || [];
-
-      setStores(storeData);
-      setGachapons(gachaponData);
-      setItems(itemData);
-
-      const paramStoreId = parseParam(params.storeId);
-      const paramGachaponId = parseParam(params.gachaponId);
-      const paramItemId = parseParam(params.itemId);
-
-      if (paramStoreId) {
-        const matched = storeData.find((s) => s.id === paramStoreId);
-        if (matched) setSelectedStore(matched);
-      } else if (storeData.length > 0) {
-        setSelectedStore(storeData[0]);
-      }
-
-      if (paramGachaponId) {
-        const matched = gachaponData.find((g) => g.id === paramGachaponId);
-        if (matched) setSelectedGachapon(matched);
-      }
-
-      if (paramItemId) {
-        const matched = itemData.find((i) => i.id === paramItemId);
-        if (matched) setSelectedItem(matched);
-      }
-    } catch (error: any) {
-      console.error('マスターデータ取得エラー:', error);
-      setLoadError(error?.message ?? '店舗やガチャ情報の取得に失敗しました。');
-      Alert.alert('データ取得失敗', '店舗やガチャ情報の取得に失敗しました。');
-    } finally {
-      setFetching(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchMasterData();
-  }, [params.gachaponId, params.imageFileName, params.imageMimeType, params.imageUri, params.itemId, params.storeId]);
 
   const isSupportedImageUri = (uri: string) =>
     uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('blob:') || uri.startsWith('data:image/');
@@ -231,7 +180,11 @@ export default function ReportCreateScreen() {
         stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 在庫あり)
       });
 
-      if (dbError) throw new Error(`DB保存失敗: ${dbError.message}`);
+      if (dbError) {
+        // ロールバック: DB保存に失敗した場合はStorageから画像を削除
+        await supabase.storage.from('photos').remove([filePath]);
+        throw new Error(`DB保存失敗: ${dbError.message}`);
+      }
 
       Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
         {
