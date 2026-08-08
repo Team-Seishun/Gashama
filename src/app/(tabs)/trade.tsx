@@ -8,10 +8,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  SafeAreaView,
+  Platform,
+  StatusBar
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/utils/supabase';
 
 interface Trade {
   id: string;
@@ -249,8 +252,9 @@ export default function TradeScreen() {
   }
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.wrapper}>
+        <View style={styles.container}>
         <View style={styles.switchTabContainer}>
           <TouchableOpacity
             style={styles.inactiveTab}
@@ -296,12 +300,18 @@ export default function TradeScreen() {
             </View>
           }
         />
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
   wrapper: {
     flex: 1,
     backgroundColor: '#F5F5F5',

@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -93,6 +94,7 @@ export default function ReportCreateScreen() {
   const [modalType, setModalType] = useState<SearchMasterMode | null>(null);
 
   const [stockStatus, setStockStatus] = useState<number>(2); // 2: 在庫あり, 1: 残りわずか, 0: 売り切れ
+  const [isCreatingTrade, setIsCreatingTrade] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
 
   const isSupportedImageUri = (uri: string) =>
@@ -134,6 +136,11 @@ export default function ReportCreateScreen() {
 
     if (!imageUri) {
       Alert.alert('写真が必要です', 'プレイ証明写真を撮影してください。');
+      return;
+    }
+
+    if (isCreatingTrade && !selectedItem) {
+      Alert.alert('入力漏れ', 'トレードを募集する場合、「出たアイテム」の選択は必須です。');
       return;
     }
 
@@ -182,7 +189,7 @@ export default function ReportCreateScreen() {
       const photoUrl = publicUrlData.publicUrl;
 
       // 2. reports テーブルへのデータ挿入
-      const { error: dbError } = await supabase.from('reports').insert({
+      const { error: dbError, data: reportData } = await supabase.from('reports').insert({
         user_id: user.id,               // uuid (FK)
         store_id: selectedStore.id,     // uuid (FK)
         gachapon_id: selectedGachapon.id, // uuid (FK)
@@ -190,7 +197,7 @@ export default function ReportCreateScreen() {
         buytime: new Date().toISOString(), // timestamp
         photo_url: photoUrl,            // string
         stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 在庫あり)
-      });
+      }).select().single();
 
       if (dbError) {
         // ロールバック: DB保存に失敗した場合はStorageから画像を削除
@@ -198,12 +205,32 @@ export default function ReportCreateScreen() {
         throw new Error(`DB保存失敗: ${dbError.message}`);
       }
 
-      Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/post'),
-        },
-      ]);
+      if (isCreatingTrade) {
+        Alert.alert('投稿完了', 'レポートを投稿しました！続けてトレード募集を作成します。', [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace({
+                pathname: '/trade-create',
+                params: {
+                  reportId: reportData.id,
+                  gachaponId: selectedGachapon.id,
+                  storeId: selectedStore.id,
+                  haveItemId: selectedItem?.id,
+                  photoUrl: photoUrl,
+                }
+              });
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/post'),
+          },
+        ]);
+      }
     } catch (error: any) {
       console.error('レポート投稿エラー:', error);
 
@@ -365,6 +392,23 @@ export default function ReportCreateScreen() {
             <Ionicons name="close-circle-outline" size={28} color="#D32F2F" />
             <Text style={styles.stockText}>売り切れ</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* トレード作成トグル */}
+        <View style={styles.tradeToggleContainer}>
+          <View style={{ flex: 1, marginRight: 16 }}>
+            <Text style={styles.tradeToggleTitle}>同時にトレードを募集する</Text>
+            <Text style={styles.tradeToggleDesc}>
+              この在庫報告に関連する商品の交換（トレード）募集を続けて作成します。
+            </Text>
+          </View>
+          <Switch
+            value={isCreatingTrade}
+            onValueChange={setIsCreatingTrade}
+            trackColor={{ false: '#E0E0E0', true: '#FF9E4D' }}
+            thumbColor={isCreatingTrade ? '#FF6F00' : '#F4F3F4'}
+            ios_backgroundColor="#E0E0E0"
+          />
         </View>
 
         {/* 投稿ボタン */}
@@ -644,5 +688,27 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  tradeToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+  },
+  tradeToggleTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  tradeToggleDesc: {
+    fontSize: 11,
+    color: '#888',
+    lineHeight: 16,
   },
 });
