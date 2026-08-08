@@ -11,7 +11,8 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   SafeAreaView,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -37,6 +38,8 @@ export default function ChatRoomScreen() {
   
   const [isReviewModalVisible, setIsReviewModalVisible] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
+  const [selectedImageMessage, setSelectedImageMessage] = useState<ChatMessage | null>(null);
+  const selectedMessageSender = selectedImageMessage?.sender_id === session?.user.id ? myProfile : partner;
   
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -79,6 +82,21 @@ export default function ChatRoomScreen() {
           
         if (messagesError) throw messagesError;
         if (messagesData) setMessages(messagesData);
+        
+        // 自分が受信者で未読のメッセージを既読に更新する
+        const { data: updatedRows, error: updateError } = await supabase
+          .from('chat_messages')
+          .update({ is_read: true })
+          .eq('room_id', roomId)
+          .eq('is_read', false)
+          .neq('sender_id', session!.user.id)
+          .select();
+          
+        console.log('Update result - updated rows:', updatedRows?.length);
+          
+        if (updateError) {
+          console.error('Failed to update read status:', updateError);
+        }
         
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 100);
       } catch (error) {
@@ -126,7 +144,8 @@ export default function ChatRoomScreen() {
         .insert({
           room_id: roomId,
           sender_id: session.user.id,
-          message: textToSend
+          message: textToSend,
+          is_read: false
         });
         
       if (error) {
@@ -292,10 +311,41 @@ export default function ChatRoomScreen() {
     return `${hours}:${minutes}`;
   };
 
-  const isApproved = true; 
-  
   const isUser1 = chatRoom?.user_1_id === session?.user.id;
   const isCompleted = isUser1 ? chatRoom?.user_1_completed : chatRoom?.user_2_completed;
+  const isApproved = chatRoom?.status === 'approved' || !chatRoom?.status; 
+  const isPending = chatRoom?.status === 'pending';
+  const isRejected = chatRoom?.status === 'rejected';
+
+  const handleApprove = async () => {
+    if (!roomId || !session?.user.id) return;
+    try {
+      await supabase.from('chat_rooms').update({ status: 'approved' }).eq('id', roomId);
+      await supabase.from('chat_messages').insert({
+        room_id: roomId,
+        sender_id: session.user.id,
+        message: '【システムメッセージ】\n交換が承認されました！チャットを始めましょう。'
+      });
+      setChatRoom(prev => prev ? { ...prev, status: 'approved' } : null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!roomId || !session?.user.id) return;
+    try {
+      await supabase.from('chat_rooms').update({ status: 'rejected' }).eq('id', roomId);
+      await supabase.from('chat_messages').insert({
+        room_id: roomId,
+        sender_id: session.user.id,
+        message: '【システムメッセージ】\n今回は条件が合わず、見送りとなりました。'
+      });
+      setChatRoom(prev => prev ? { ...prev, status: 'rejected' } : null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -317,14 +367,7 @@ export default function ChatRoomScreen() {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            {partner?.icon_image && partner.icon_image.startsWith('http') ? (
-              <Image source={{ uri: partner.icon_image }} style={styles.headerAvatar} contentFit="cover" />
-            ) : (
-              <View style={[styles.headerAvatar, { backgroundColor: '#E1F5FE' }]}>
-                <Ionicons name="person" size={16} color="#007AFF" />
-              </View>
-            )}
-            <Text style={styles.headerTitle}>{partner?.nickname || '名無しさん'}</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>出:アメA ⇄ 求:ビーフ</Text>
           </View>
           <TouchableOpacity 
             style={[styles.completeButton, isCompleted && styles.completedButton]}
@@ -336,6 +379,39 @@ export default function ChatRoomScreen() {
             <Ionicons name={isCompleted ? "checkmark-done-circle" : "checkmark-circle-outline"} size={16} color="#fff" style={{marginRight: 4}} />
             <Text style={styles.completeButtonText}>{isCompleted ? '交換完了' : '交換評価をする'}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* トレード内容バナー (画像付き・モック) */}
+        <View style={styles.tradeInfoBanner}>
+          <Text style={styles.tradeInfoBannerTitle}>交換するアイテム</Text>
+          <View style={styles.tradeInfoBannerContent}>
+            <View style={styles.tradeInfoBannerItem}>
+              <View style={styles.tradeInfoBadgeOffer}><Text style={styles.tradeInfoBadgeText}>出</Text></View>
+              <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
+              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>アメ A</Text>
+            </View>
+            <Ionicons name="swap-horizontal" size={20} color="#D95C14" style={{ marginHorizontal: 8 }} />
+            <View style={styles.tradeInfoBannerItem}>
+              <View style={styles.tradeInfoBadgeRequest}><Text style={styles.tradeInfoBadgeText}>求</Text></View>
+              <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_request/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
+              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>ビーフ</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 取引相手バナー */}
+        <View style={styles.partnerInfoBanner}>
+          <Text style={styles.partnerInfoBannerTitle}>取引相手</Text>
+          <View style={styles.partnerInfoBannerContent}>
+            {partner?.icon_image && partner.icon_image.startsWith('http') ? (
+              <Image source={{ uri: partner.icon_image }} style={styles.partnerBannerAvatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.partnerBannerAvatar, { backgroundColor: '#E1F5FE' }]}>
+                <Ionicons name="person" size={16} color="#007AFF" />
+              </View>
+            )}
+            <Text style={styles.partnerBannerName} numberOfLines={1}>{partner?.nickname || '名無しさん'}</Text>
+          </View>
         </View>
 
         {/* チャットエリア */}
@@ -352,6 +428,7 @@ export default function ChatRoomScreen() {
               isOwnMessage={msg.sender_id === session?.user.id}
               isSystemMessage={msg.message.startsWith('【システムメッセージ】')}
               imageUrl={msg.image_url}
+              onImagePress={() => setSelectedImageMessage(msg)}
             />
           ))}
           {isSending && (
@@ -363,43 +440,92 @@ export default function ChatRoomScreen() {
 
         {/* 下部エリア (クイックリプライ ＋ 入力フォーム) */}
         <View style={styles.bottomArea}>
-          {isApproved && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplyScroll}>
-              <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('よろしくお願いします！')}>
-                <Text style={styles.quickReplyText}>よろしくお願いします！</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('駅前で交換できますか？')}>
-                <Text style={styles.quickReplyText}>駅前で交換できますか？</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
+          {isPending ? (
+            isUser1 ? (
+              // 申請者の場合
+              <View style={styles.pendingMessageContainer}>
+                <Text style={styles.pendingMessageText}>相手の承認をお待ちください...</Text>
+              </View>
+            ) : (
+              // 被申請者の場合
+              <View style={styles.approvalActionContainer}>
+                {/* 申請者の情報とアイテムの提示 */}
+                <View style={styles.applicantInfoCard}>
+                  <View style={styles.applicantProfile}>
+                    <View style={styles.applicantAvatarWrapper}>
+                      <Ionicons name="person" size={20} color="#007AFF" />
+                    </View>
+                    <View style={styles.applicantDetails}>
+                      <Text style={styles.applicantName}>{partner?.nickname || 'ゲスト'}</Text>
+                      <Text style={styles.applicantId}>@user_{partner?.id?.substring(0, 6) || '123456'}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.applicantMessage}>が以下のアイテムとの交換を提案しています</Text>
+                  
+                  <View style={styles.proposedItemCard}>
+                    <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/150/150` }} style={styles.proposedItemImage} />
+                    <View style={styles.proposedItemInfo}>
+                      <Text style={styles.proposedItemLabel}>提示アイテム</Text>
+                      <Text style={styles.proposedItemName} numberOfLines={2}>アメ A (モック)</Text>
+                    </View>
+                  </View>
+                </View>
 
-          <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachButton} disabled={!isApproved} onPress={handlePickImage}>
-              <Ionicons name="add" size={24} color={isApproved ? "#666" : "#ccc"} />
-            </TouchableOpacity>
-            <View style={[styles.inputWrapper, !isApproved && styles.inputWrapperDisabled]}>
-              <TextInput
-                style={styles.textInput}
-                placeholder={isApproved ? "メッセージを入力..." : "相手が承認すると入力できます"}
-                placeholderTextColor="#999"
-                value={inputText}
-                onChangeText={setInputText}
-                editable={isApproved}
-              />
+                <View style={styles.approvalButtonsRow}>
+                  <TouchableOpacity style={styles.approveButton} onPress={handleApprove}>
+                    <Text style={styles.approveButtonText}>✅ 承認する</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.rejectButton} onPress={handleReject}>
+                    <Text style={styles.rejectButtonText}>❌ 見送る</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
+          ) : isRejected ? (
+            // 拒否された場合
+            <View style={styles.pendingMessageContainer}>
+              <Text style={styles.pendingMessageText}>この交換申請は見送りとなりました。</Text>
             </View>
-            <TouchableOpacity 
-              style={[styles.sendButton, (!isApproved || !inputText.trim()) && styles.sendButtonDisabled]} 
-              disabled={!isApproved || !inputText.trim() || isSending}
-              onPress={handleSend}
-            >
-              <Ionicons name="send" size={16} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          ) : (
+            // 承認済み または 過去のチャット
+            <>
+              {isApproved && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplyScroll}>
+                  <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('よろしくお願いします！')}>
+                    <Text style={styles.quickReplyText}>よろしくお願いします！</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.quickReplyBadge} onPress={() => setInputText('駅前で交換できますか？')}>
+                    <Text style={styles.quickReplyText}>駅前で交換できますか？</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+              <View style={styles.inputContainer}>
+                <TouchableOpacity style={styles.attachButton} disabled={!isApproved} onPress={handlePickImage}>
+                  <Ionicons name="add" size={24} color={isApproved ? "#666" : "#ccc"} />
+                </TouchableOpacity>
+                <View style={[styles.inputWrapper, !isApproved && styles.inputWrapperDisabled]}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder={isApproved ? "メッセージを入力..." : "相手が承認すると入力できます"}
+                    placeholderTextColor="#999"
+                    value={inputText}
+                    onChangeText={setInputText}
+                    editable={isApproved}
+                  />
+                </View>
+                <TouchableOpacity 
+                  style={[styles.sendButton, (!isApproved || !inputText.trim()) && styles.sendButtonDisabled]} 
+                  disabled={!isApproved || !inputText.trim() || isSending}
+                  onPress={handleSend}
+                >
+                  <Ionicons name="send" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
-      {/* 評価モーダル */}
       <ReviewModal
         isVisible={isReviewModalVisible}
         onClose={() => setIsReviewModalVisible(false)}
@@ -407,6 +533,62 @@ export default function ChatRoomScreen() {
         onSubmit={handleComplete}
         partner={partner}
       />
+
+      {/* 画像拡大モーダル */}
+      <Modal
+        visible={!!selectedImageMessage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedImageMessage(null)}
+      >
+        <View style={styles.imageModalOverlay}>
+          {/* 背景タップで閉じる */}
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill} 
+            activeOpacity={1} 
+            onPress={() => setSelectedImageMessage(null)}
+          />
+          <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }} pointerEvents="box-none">
+            <TouchableOpacity 
+              style={styles.imageModalCloseButton} 
+              onPress={() => setSelectedImageMessage(null)}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+
+            {selectedImageMessage?.image_url && (
+              <Image 
+                source={{ uri: selectedImageMessage.image_url }} 
+                style={styles.imageModalContent} 
+                contentFit="contain" 
+              />
+            )}
+
+            {/* 詳細情報 (送信者情報と送信時間) */}
+            <View style={styles.modalInfoBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                {selectedMessageSender?.icon_image && selectedMessageSender.icon_image.startsWith('http') ? (
+                  <Image source={{ uri: selectedMessageSender.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                ) : (
+                  <Ionicons name="person-circle" size={40} color="#ccc" style={{ marginLeft: -2 }} />
+                )}
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: 'bold' }}>
+                    {selectedMessageSender?.nickname || '名無しさん'}
+                  </Text>
+                  <Text style={{ color: '#aaa', fontSize: 12 }}>
+                    @{selectedMessageSender?.id ? selectedMessageSender.id.substring(0, 8) : 'unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={{ color: '#aaa', fontSize: 13 }}>
+                送信時間: {selectedImageMessage ? new Date(selectedImageMessage.created_at).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -464,6 +646,98 @@ const styles = StyleSheet.create({
   completeButtonText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  partnerInfoBanner: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  partnerInfoBannerTitle: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  partnerInfoBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  partnerBannerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  partnerBannerName: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  tradeInfoBanner: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  tradeInfoBannerTitle: {
+    fontSize: 11,
+    color: '#D95C14',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  tradeInfoBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tradeInfoBannerItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  tradeInfoItemImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    marginRight: 6,
+    backgroundColor: '#F5F5F5',
+  },
+  tradeInfoBannerItemName: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  tradeInfoBadgeOffer: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  tradeInfoBadgeRequest: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  tradeInfoBadgeText: {
+    fontSize: 10,
+    color: '#fff',
     fontWeight: 'bold',
   },
   chatScrollContainer: {
@@ -532,5 +806,144 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: '#FFE5CC',
+  },
+  imageModalOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 20,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  imageModalContent: {
+    width: '100%',
+    height: '100%',
+  },
+  modalInfoBox: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 40 : 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(30, 30, 30, 0.85)',
+    borderRadius: 16,
+    padding: 16,
+  },
+  pendingMessageContainer: {
+    padding: 16,
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  pendingMessageText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  approvalActionContainer: {
+    padding: 16,
+    backgroundColor: '#F9F9F9',
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  applicantInfoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  applicantProfile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  applicantAvatarWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E1F5FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  applicantDetails: {
+    flex: 1,
+  },
+  applicantName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  applicantId: {
+    fontSize: 12,
+    color: '#888',
+  },
+  applicantMessage: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  proposedItemCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  proposedItemImage: {
+    width: 60,
+    height: 60,
+  },
+  proposedItemInfo: {
+    flex: 1,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  proposedItemLabel: {
+    fontSize: 11,
+    color: '#FF7A00',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  proposedItemName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  approvalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#F44336',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
