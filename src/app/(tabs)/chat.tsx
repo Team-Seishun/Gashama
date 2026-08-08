@@ -1,11 +1,85 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, memo } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ChatRoomWithPartner } from '@/features/chat/types';
+
+const formatTimeAgo = (dateString: string | null) => {
+  if (!dateString) return '';
+  // eslint-disable-next-line react-hooks/purity
+  const diff = Date.now() - new Date(dateString).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'たった今';
+  if (minutes < 60) return `${minutes}分前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}時間前`;
+  return `${Math.floor(hours / 24)}日前`;
+};
+
+const ChatListItem = memo(({ item, onPress }: { item: ChatRoomWithPartner, onPress: (id: string) => void }) => {
+  const isSystemMessage = item.latestMessage?.startsWith('【システムメッセージ】');
+  const displayMessage = isSystemMessage 
+    ? item.latestMessage?.replace('【システムメッセージ】\n', '') 
+    : item.latestMessage;
+
+  return (
+    <TouchableOpacity style={styles.chatListItem} onPress={() => onPress(item.id)}>
+      <View style={styles.avatarContainer}>
+        <Image 
+          source={{ uri: `https://picsum.photos/seed/${item.id}_request/100/100` }} 
+          style={styles.avatar} 
+          contentFit="cover" 
+        />
+        {!!item.unreadCount && item.unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+          </View>
+        )}
+      </View>
+      
+      <View style={styles.chatInfo}>
+        <View style={styles.chatHeader}>
+          <View style={styles.tradeTitleContainer}>
+            <View style={styles.badgeOffer}><Text style={styles.badgeText}>出</Text></View>
+            <Text style={styles.tradeTitleItem} numberOfLines={1}>アメ A</Text>
+            
+            <Ionicons name="swap-horizontal" size={14} color="#D95C14" style={{ marginHorizontal: 4 }} />
+            
+            <View style={styles.badgeRequest}><Text style={styles.badgeText}>求</Text></View>
+            <Text style={styles.tradeTitleItem} numberOfLines={1}>ビーフ</Text>
+          </View>
+          <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
+        </View>
+        
+        {/* 2行目: ガチャポン名と相手のユーザー名 (現在はモック表示) */}
+        <View style={styles.tradeSummaryRow}>
+          <View style={styles.gachaponTag}>
+            <Ionicons name="cube" size={12} color="#FF7A00" style={{ marginRight: 4 }} />
+            <Text style={styles.gachaponName} numberOfLines={1}>ちいかわ (ハチワレ)</Text>
+          </View>
+          <Text style={{ color: '#E0E0E0', marginHorizontal: 6 }}>|</Text>
+          <Ionicons name="person-circle" size={14} color="#007AFF" style={{ marginRight: 2 }} />
+          <Text style={styles.partnerName} numberOfLines={1}>{item.partner?.nickname || '名無しさん'}</Text>
+        </View>
+        
+        <View style={styles.messageRow}>
+          {isSystemMessage && (
+            <Ionicons name="information-circle" size={14} color="#999" style={{ marginRight: 4 }} />
+          )}
+          <Text 
+            style={[styles.messageText, isSystemMessage && styles.systemMessageText]} 
+            numberOfLines={1}
+          >
+            {displayMessage}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function ChatListScreen() {
   const router = useRouter();
@@ -148,83 +222,13 @@ export default function ChatListScreen() {
     };
   }, [session?.user.id, fetchChatRooms]);
 
-  const handlePress = (roomId: string) => {
+  const handlePress = useCallback((roomId: string) => {
     router.push(`/chat-room?roomId=${roomId}`);
-  };
+  }, [router]);
 
-  const formatTimeAgo = (dateString: string | null) => {
-    if (!dateString) return '';
-    // eslint-disable-next-line react-hooks/purity
-    const diff = Date.now() - new Date(dateString).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'たった今';
-    if (minutes < 60) return `${minutes}分前`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}時間前`;
-    return `${Math.floor(hours / 24)}日前`;
-  };
-
-  const renderItem = ({ item }: { item: ChatRoomWithPartner }) => {
-    const isSystemMessage = item.latestMessage?.startsWith('【システムメッセージ】');
-    const displayMessage = isSystemMessage 
-      ? item.latestMessage?.replace('【システムメッセージ】\n', '') 
-      : item.latestMessage;
-
-    return (
-      <TouchableOpacity style={styles.chatListItem} onPress={() => handlePress(item.id)}>
-        <View style={styles.avatarContainer}>
-          <Image 
-            source={{ uri: `https://picsum.photos/seed/${item.id}_request/100/100` }} 
-            style={styles.avatar} 
-            contentFit="cover" 
-          />
-          {!!item.unreadCount && item.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
-            </View>
-          )}
-        </View>
-        
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <View style={styles.tradeTitleContainer}>
-              <View style={styles.badgeOffer}><Text style={styles.badgeText}>出</Text></View>
-              <Text style={styles.tradeTitleItem} numberOfLines={1}>アメ A</Text>
-              
-              <Ionicons name="swap-horizontal" size={14} color="#D95C14" style={{ marginHorizontal: 4 }} />
-              
-              <View style={styles.badgeRequest}><Text style={styles.badgeText}>求</Text></View>
-              <Text style={styles.tradeTitleItem} numberOfLines={1}>ビーフ</Text>
-            </View>
-            <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
-          </View>
-          
-          {/* 2行目: ガチャポン名と相手のユーザー名 (現在はモック表示) */}
-          <View style={styles.tradeSummaryRow}>
-            <View style={styles.gachaponTag}>
-              <Ionicons name="cube" size={12} color="#FF7A00" style={{ marginRight: 4 }} />
-              <Text style={styles.gachaponName} numberOfLines={1}>ちいかわ (ハチワレ)</Text>
-            </View>
-            <Text style={{ color: '#E0E0E0', marginHorizontal: 6 }}>|</Text>
-            <Ionicons name="person-circle" size={14} color="#007AFF" style={{ marginRight: 2 }} />
-            <Text style={styles.partnerName} numberOfLines={1}>{item.partner?.nickname || '名無しさん'}</Text>
-          </View>
-          
-          <View style={styles.messageRow}>
-            {isSystemMessage && (
-              <Ionicons name="information-circle" size={14} color="#999" style={{ marginRight: 4 }} />
-            )}
-            <Text 
-              style={[styles.messageText, isSystemMessage && styles.systemMessageText]} 
-              numberOfLines={1}
-            >
-              {displayMessage}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(({ item }: { item: ChatRoomWithPartner }) => (
+    <ChatListItem item={item} onPress={handlePress} />
+  ), [handlePress]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
