@@ -176,7 +176,7 @@ export default function ReportCreateScreen() {
       return;
     }
 
-    let uploadedPath: string | null = null;
+    let uploadedFilePath: string | null = null;
 
     try {
       setLoading(true);
@@ -211,7 +211,7 @@ export default function ReportCreateScreen() {
         });
 
       if (uploadError) throw new Error(`画像アップロード失敗: ${uploadError.message}`);
-      uploadedPath = filePath;
+      uploadedFilePath = filePath;
 
       // 公開URLの取得
       const { data: publicUrlData } = supabase.storage
@@ -242,8 +242,8 @@ export default function ReportCreateScreen() {
     } catch (error: any) {
       console.error('レポート投稿エラー:', error);
 
-      if (uploadedPath) {
-        await supabase.storage.from('photos').remove([uploadedPath]);
+      if (uploadedFilePath) {
+        await supabase.storage.from('photos').remove([uploadedFilePath]);
       }
 
       Alert.alert('投稿エラー', error.message || '投稿に失敗しました。');
