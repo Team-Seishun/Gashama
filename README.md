@@ -116,4 +116,8 @@ src/
 
 ## 📄 ライセンス
 
-[MIT License](LICENSE)
+このプロジェクトは [MIT License](LICENSE) のもとでオープンソースとして公開されています。
+
+```text
+Copyright (c) 2026 NxTEND-THE-HACK (Team 40)
+```
