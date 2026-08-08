@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -15,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
 
@@ -376,7 +376,7 @@ export default function ReportCreateScreen() {
               </TouchableOpacity>
             </View>
 
-            <FlatList<ModalOptionItem>
+            <FlashList<ModalOptionItem>
               data={getModalData()}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (

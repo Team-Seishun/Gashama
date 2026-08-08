@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState, useEffect, memo } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
@@ -247,12 +248,9 @@ export default function ChatListScreen() {
             <Text style={{ color: '#999', fontSize: 16 }}>チャット履歴がありません</Text>
           </View>
         ) : (
-          <FlatList
+          <FlashList
             data={chatRooms}
             keyExtractor={(item) => item.id}
-            initialNumToRender={10}
-            windowSize={5}
-            maxToRenderPerBatch={10}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
           />

@@ -2,7 +2,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
   RefreshControl,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { supabase } from '../lib/supabase';
 
 interface Trade {
@@ -276,7 +276,7 @@ export default function TradeScreen() {
           </TouchableOpacity>
         </View>
 
-        <FlatList
+        <FlashList
           data={searchQuery.trim() === '' ? trades : filteredTrades}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
