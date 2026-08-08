@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -13,13 +13,11 @@ export default function ChatListScreen() {
   const [chatRooms, setChatRooms] = useState<ChatRoomWithPartner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!session?.user.id) return;
-
-    const fetchChatRooms = async (userId: string) => {
-      setIsLoading(true);
-      try {
+  const fetchChatRooms = useCallback(async (userId: string) => {
+    // 最初の読み込み時のみローディング表示（バックグラウンド更新では出さない）
+    if (chatRooms.length === 0) setIsLoading(true);
+    
+    try {
         // 1. 自分が参加しているチャットルーム一覧を取得
         const { data: roomsData, error: roomsError } = await supabase
           .from('chat_rooms')
@@ -98,11 +96,33 @@ export default function ChatListScreen() {
       } finally {
         setIsLoading(false);
       }
-    };
+  }, [chatRooms.length]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!session?.user.id) return;
       fetchChatRooms(session.user.id);
-    }, [session?.user.id])
+    }, [session?.user.id, fetchChatRooms])
   );
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+
+    const channel = supabase
+      .channel('chat_list_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'chat_messages' },
+        () => {
+          fetchChatRooms(session.user.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user.id, fetchChatRooms]);
 
   const handlePress = (roomId: string) => {
     router.push(`/chat-room?roomId=${roomId}`);

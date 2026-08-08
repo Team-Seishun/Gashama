@@ -9,9 +9,10 @@ type MessageBubbleProps = {
   isSystemMessage?: boolean;
   imageUrl?: string | null;
   onImagePress?: (imageUrl: string) => void;
+  isRead?: boolean;
 };
 
-export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, imageUrl, onImagePress }: MessageBubbleProps) {
+export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, imageUrl, onImagePress, isRead }: MessageBubbleProps) {
   if (isSystemMessage) {
     const displayText = text.replace('【システムメッセージ】\n', '');
     return (
@@ -28,7 +29,12 @@ export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, image
   if (isOwnMessage) {
     return (
       <View style={[styles.messageRow, styles.messageRowRight]}>
-        <Text style={[styles.timeText, { marginRight: 8 }]}>{time}</Text>
+        <View style={styles.messageInfoRight}>
+          {isRead !== undefined && (
+            <Text style={styles.readText}>{isRead ? '既読' : '未読'}</Text>
+          )}
+          <Text style={styles.timeText}>{time}</Text>
+        </View>
         <View style={[styles.messageBubbleRight, imageUrl ? { backgroundColor: 'transparent', padding: 0 } : null]}>
           {imageUrl && (
             <TouchableOpacity activeOpacity={0.8} onPress={() => onImagePress?.(imageUrl)}>
@@ -121,6 +127,16 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: 16,
     backgroundColor: '#F5F5F5',
+  },
+  messageInfoRight: {
+    marginRight: 8,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+  readText: {
+    fontSize: 10,
+    color: '#999',
+    marginBottom: 2,
   },
   timeText: {
     fontSize: 11,

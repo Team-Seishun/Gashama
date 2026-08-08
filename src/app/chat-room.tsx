@@ -10,7 +10,6 @@ import {
   ScrollView, 
   KeyboardAvoidingView, 
   Platform, 
-  SafeAreaView,
   ActivityIndicator,
   Modal
 } from 'react-native';
@@ -138,7 +137,8 @@ export default function ChatRoomScreen() {
             room_id: roomId,
             sender_id: session.user.id,
             message: '', // テキストはなし
-            image_url: publicUrl
+            image_url: publicUrl,
+            is_read: false
           });
           
         if (insertError) throw insertError;
@@ -297,23 +297,6 @@ export default function ChatRoomScreen() {
     );
   }
 
-  // 承認ハンドラ
-  const handleApprove = useCallback(() => {
-    setIsApproving(true);
-    setTimeout(() => {
-      setIsApproving(false);
-      setIsApproved(true);
-    }, CONSTANTS.MOCK_LOADING_TIME);
-  }, []);
-
-  // 評価送信ハンドラ
-  const handleSubmitReview = useCallback(() => {
-    setIsReviewSubmitting(true);
-    setTimeout(() => {
-      setIsReviewSubmitting(false);
-      setIsReviewModalVisible(false);
-    }, CONSTANTS.MOCK_LOADING_TIME);
-  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -389,6 +372,7 @@ export default function ChatRoomScreen() {
               isSystemMessage={msg.message.startsWith('【システムメッセージ】')}
               imageUrl={msg.image_url}
               onImagePress={() => setSelectedImageMessage(msg)}
+              isRead={msg.is_read}
             />
           ))}
           {isSending && (

@@ -3,7 +3,7 @@ import { ScrollView } from 'react-native';
 import { supabase } from '@/utils/supabase';
 import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
 
-export function useChatRoom(roomId: string | undefined, userId: string | undefined, scrollViewRef: React.RefObject<ScrollView>) {
+export function useChatRoom(roomId: string | undefined, userId: string | undefined, scrollViewRef: React.RefObject<ScrollView | null>) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partner, setPartner] = useState<Profile | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
@@ -83,6 +83,27 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
             return [...prev, newMessage];
           });
           setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+
+          // 現在画面を開いている状態で相手からメッセージが来た場合、すぐに既読にする
+          if (newMessage.sender_id !== userId) {
+            supabase
+              .from('chat_messages')
+              .update({ is_read: true })
+              .eq('id', newMessage.id)
+              .then(({ error }) => {
+                if (error) console.error('Failed to mark incoming message as read:', error);
+              });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const updatedMessage = payload.new as ChatMessage;
+          setMessages((prev) => 
+            prev.map((msg) => (msg.id === updatedMessage.id ? updatedMessage : msg))
+          );
         }
       )
       .subscribe();
