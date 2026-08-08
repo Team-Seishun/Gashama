@@ -4,10 +4,9 @@ import TabBar from '@/components/tab-bar';
 import { appTabDefinitions } from '@/constants/app-tabs';
 
 export default function AppTabs() {
-
   return (
     <Tabs
-      tabBar={(props) => <TabBar {...props} />}
+      tabBar={(props) => <TabBar {...(props as any)} />}
       screenOptions={{ headerShown: false }}
     >
       {appTabDefinitions.map((tab) => (
@@ -16,4 +15,3 @@ export default function AppTabs() {
     </Tabs>
   );
 }
-
