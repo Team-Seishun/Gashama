@@ -101,6 +101,8 @@ export default function SearchScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
+            keyboardType="default"
+            inputMode="text"
           />
           {loading ? (
             <ActivityIndicator size="small" color="#999" />
