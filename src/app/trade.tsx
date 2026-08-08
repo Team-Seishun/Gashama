@@ -76,18 +76,12 @@ export default function TradeScreen() {
     fetchTrades();
   };
 
-  const renderItem = ({ item }: { item: Trade }) => (
-    <View style={styles.card}>
-      <View style={styles.tradeHeader}>
-        <Text style={styles.userName}>{item.user_name || '匿名ユーザー'}</Text>
-        {item.status && <Text style={styles.statusBadge}>{item.status}</Text>}
-      </View>
-      <View style={styles.tradeDetail}>
-        <Text style={styles.giveText}>譲: {item.item_give}</Text>
-        <Text style={styles.wantText}>求: {item.item_want}</Text>
-      </View>
-    </View>
-  );
+79:   const renderItem = useCallback(({ item }: { item: Trade }) => (
+80:     <View style={styles.card}>
+...
+90:     </View>
+91:   ), []);
+
 
   if (loading) {
     return (
