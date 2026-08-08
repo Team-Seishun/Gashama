@@ -35,6 +35,8 @@ export default function ReportCreateScreen() {
   // URLパラメータからの初期値取得
   const params = useLocalSearchParams<{
     imageUri?: string | string[];
+    imageFileName?: string | string[];
+    imageMimeType?: string | string[];
     storeId?: string | string[];
     gachaponId?: string | string[];
     itemId?: string | string[];
@@ -42,16 +44,25 @@ export default function ReportCreateScreen() {
 
   const parseParam = (param?: string | string[]) => {
     const raw = Array.isArray(param) ? param[0] : param;
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
   };
 
   const imageUri = parseParam(params.imageUri);
+  const imageFileName = parseParam(params.imageFileName);
+  const imageMimeType = parseParam(params.imageMimeType);
 
   // DBから取得したマスターデータ一覧
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [gachapons, setGachapons] = useState<GachaponItem[]>([]);
   const [items, setItems] = useState<ItemType[]>([]);
   const [fetching, setFetching] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // 選択中の状態（State）
   const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
@@ -67,59 +78,79 @@ export default function ReportCreateScreen() {
   // ----------------------------------------------------
   // Supabase からマスターデータを取得
   // ----------------------------------------------------
-  useEffect(() => {
-    const fetchMasterData = async () => {
-      try {
-        setFetching(true);
+  const fetchMasterData = async () => {
+    try {
+      setFetching(true);
+      setLoadError(null);
 
-        const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
-          supabase.from('stores').select('id, name'),
-          supabase.from('gachapons').select('id, name'),
-          supabase.from('gachapon_items').select('id, name'),
-        ]);
+      const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
+        supabase.from('stores').select('id, name'),
+        supabase.from('gachapons').select('id, name'),
+        supabase.from('gachapon_items').select('id, name'),
+      ]);
 
-        if (storesRes.error) throw storesRes.error;
-        if (gachaponsRes.error) throw gachaponsRes.error;
-        if (itemsRes.error) throw itemsRes.error;
+      if (storesRes.error) throw storesRes.error;
+      if (gachaponsRes.error) throw gachaponsRes.error;
+      if (itemsRes.error) throw itemsRes.error;
 
-        const storeData = storesRes.data || [];
-        const gachaponData = gachaponsRes.data || [];
-        const itemData = itemsRes.data || [];
+      const storeData = storesRes.data || [];
+      const gachaponData = gachaponsRes.data || [];
+      const itemData = itemsRes.data || [];
 
-        setStores(storeData);
-        setGachapons(gachaponData);
-        setItems(itemData);
+      setStores(storeData);
+      setGachapons(gachaponData);
+      setItems(itemData);
 
-        const paramStoreId = parseParam(params.storeId);
-        const paramGachaponId = parseParam(params.gachaponId);
-        const paramItemId = parseParam(params.itemId);
+      const paramStoreId = parseParam(params.storeId);
+      const paramGachaponId = parseParam(params.gachaponId);
+      const paramItemId = parseParam(params.itemId);
 
-        if (paramStoreId) {
-          const matched = storeData.find((s) => s.id === paramStoreId);
-          if (matched) setSelectedStore(matched);
-        } else if (storeData.length > 0) {
-          setSelectedStore(storeData[0]);
-        }
-
-        if (paramGachaponId) {
-          const matched = gachaponData.find((g) => g.id === paramGachaponId);
-          if (matched) setSelectedGachapon(matched);
-        }
-
-        if (paramItemId) {
-          const matched = itemData.find((i) => i.id === paramItemId);
-          if (matched) setSelectedItem(matched);
-        }
-      } catch (error: any) {
-        console.error('マスターデータ取得エラー:', error);
-        Alert.alert('データ取得失敗', '店舗やガチャ情報の取得に失敗しました。');
-      } finally {
-        setFetching(false);
+      if (paramStoreId) {
+        const matched = storeData.find((s) => s.id === paramStoreId);
+        if (matched) setSelectedStore(matched);
+      } else if (storeData.length > 0) {
+        setSelectedStore(storeData[0]);
       }
-    };
 
+      if (paramGachaponId) {
+        const matched = gachaponData.find((g) => g.id === paramGachaponId);
+        if (matched) setSelectedGachapon(matched);
+      }
+
+      if (paramItemId) {
+        const matched = itemData.find((i) => i.id === paramItemId);
+        if (matched) setSelectedItem(matched);
+      }
+    } catch (error: any) {
+      console.error('マスターデータ取得エラー:', error);
+      setLoadError(error?.message ?? '店舗やガチャ情報の取得に失敗しました。');
+      Alert.alert('データ取得失敗', '店舗やガチャ情報の取得に失敗しました。');
+    } finally {
+      setFetching(false);
+    }
+  };
+
+  useEffect(() => {
     fetchMasterData();
-  }, []);
+  }, [params.gachaponId, params.imageFileName, params.imageMimeType, params.imageUri, params.itemId, params.storeId]);
+
+  const isSupportedImageUri = (uri: string) =>
+    uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('blob:') || uri.startsWith('data:image/');
+
+  const inferImageExtension = (uri: string, fileName: string | null, mimeType: string | null) => {
+    if (mimeType?.startsWith('image/')) {
+      const mimeExtension = mimeType.split('/')[1]?.toLowerCase();
+      if (mimeExtension === 'jpeg') return 'jpg';
+      if (mimeExtension) return mimeExtension;
+    }
+
+    const sourceName = fileName || uri;
+    const uriExtension = sourceName.split('.').pop()?.split('?')[0]?.toLowerCase();
+
+    if (!uriExtension) return 'jpg';
+    if (uriExtension === 'jpeg') return 'jpg';
+    return uriExtension;
+  };
 
   const handleTakePhoto = () => {
     router.push('/camera');
@@ -145,6 +176,8 @@ export default function ReportCreateScreen() {
       return;
     }
 
+    let uploadedPath: string | null = null;
+
     try {
       setLoading(true);
 
@@ -154,11 +187,19 @@ export default function ReportCreateScreen() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('ログイン状態が確認できません。再度ログインしてください。');
 
+      if (!isSupportedImageUri(imageUri)) {
+        throw new Error('画像の形式が正しくありません。撮影し直してください。');
+      }
+
       // 画像のアップロード処理
       const response = await fetch(imageUri);
+      if (!response.ok) {
+        throw new Error('画像を読み込めませんでした。');
+      }
+
       const arrayBuffer = await response.arrayBuffer();
 
-      const fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+      const fileExt = inferImageExtension(imageUri, imageFileName, imageMimeType);
       const fileName = `${user.id}_${Date.now()}.${fileExt}`;
       const filePath = `reports/${fileName}`;
 
@@ -170,6 +211,7 @@ export default function ReportCreateScreen() {
         });
 
       if (uploadError) throw new Error(`画像アップロード失敗: ${uploadError.message}`);
+      uploadedPath = filePath;
 
       // 公開URLの取得
       const { data: publicUrlData } = supabase.storage
@@ -199,6 +241,11 @@ export default function ReportCreateScreen() {
       ]);
     } catch (error: any) {
       console.error('レポート投稿エラー:', error);
+
+      if (uploadedPath) {
+        await supabase.storage.from('photos').remove([uploadedPath]);
+      }
+
       Alert.alert('投稿エラー', error.message || '投稿に失敗しました。');
     } finally {
       setLoading(false);
@@ -224,6 +271,18 @@ export default function ReportCreateScreen() {
     return (
       <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#FF6F00" />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={[styles.safeArea, styles.errorContainer]}>
+        <Text style={styles.errorTitle}>データの読み込みに失敗しました</Text>
+        <Text style={styles.errorText}>{loadError}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchMasterData}>
+          <Text style={styles.retryButtonText}>再読み込み</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -565,5 +624,34 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 15,
     color: '#333',
+  },
+  errorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FF6F00',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
