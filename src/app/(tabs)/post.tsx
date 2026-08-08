@@ -1,11 +1,12 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 
 // ----------------------------------------------------
 // モックデータの生成
@@ -85,9 +86,43 @@ const MOCK_INVENTORIES = Array.from({ length: 20 }).map((_, i) => ({
 export default function PostScreen() {
   const router = useRouter();
   const { session } = useAuth();
-  const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>('trade');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>('inventory');
   const [isApplying, setIsApplying] = useState(false);
   const [selectedTradeForApply, setSelectedTradeForApply] = useState<typeof MOCK_TRADES[0] | null>(null);
+
+  const [inventories, setInventories] = useState<ReportItem[]>([]);
+  const [loadingInventories, setLoadingInventories] = useState(false);
+
+  // 在庫報告（reportsテーブル）の実データを取得
+  const fetchInventories = async () => {
+    setLoadingInventories(true);
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          photo_url,
+          stock_status,
+          created_at,
+          profiles ( nickname, icon_image ),
+          stores ( name ),
+          gachapons ( name ),
+          gachapon_items ( name )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (error) {
+        console.error('在庫情報の取得エラー:', error);
+      } else if (data) {
+        setInventories(data as any as ReportItem[]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingInventories(false);
+    }
+  };
 
   const handleConfirmApplyTrade = async (trade: typeof MOCK_TRADES[0], myItem: typeof ITEM_MOCKS[0]) => {
     // 1. gachapon_id が一致するか確認
@@ -197,10 +232,7 @@ export default function PostScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (__DEV__) console.log('PostScreen: focused');
-      return () => {
-        if (__DEV__) console.log('PostScreen: blurred');
-      };
+      fetchInventories();
     }, [])
   );
 
@@ -286,41 +318,9 @@ export default function PostScreen() {
     </View>
   );
 
-  // 在庫カードの描画
-  const renderInventoryCard = ({ item }: { item: typeof MOCK_INVENTORIES[0] }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.userInfo}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: '#F0F0F0' }]}>
-             <Ionicons name="person" size={20} color="#999" />
-          </View>
-          <View style={styles.userNameContainer}>
-            <Text style={styles.userName}>{item.user}</Text>
-            <View style={styles.placeBadge}>
-              <Text style={styles.placeBadgeText}>{item.shop}</Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-vertical" size={20} color="#D95C14" />
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.distTimeText}>{item.time}</Text>
-
-      <View style={styles.inventoryContent}>
-        <Image
-          source={{ uri: `https://picsum.photos/seed/${item.id}_inv/200/200` }}
-          style={[styles.itemImagePlaceholderInv, { overflow: 'hidden' }]}
-          contentFit="cover"
-        />
-        <View style={styles.inventoryInfo}>
-           <Text style={styles.inventoryItemName}>{item.itemName}</Text>
-           <Text style={[styles.inventoryStatus, { color: item.statusColor }]}>{item.status}</Text>
-        </View>
-      </View>
-    </View>
-  );
-
+  // ----------------------------------------------------
+  // メインのレンダリング
+  // ----------------------------------------------------
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -379,13 +379,22 @@ export default function PostScreen() {
             showsVerticalScrollIndicator={false}
           />
         ) : (
-          <FlashList
-            data={MOCK_INVENTORIES}
-            keyExtractor={(item) => item.id}
-            renderItem={renderInventoryCard}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
+          loadingInventories && inventories.length === 0 ? (
+            <ActivityIndicator size="large" color="#FF7A00" style={{ marginTop: 40 }} />
+          ) : (
+            <FlashList
+              data={inventories}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <InventoryCard item={item} />}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              refreshing={loadingInventories}
+              onRefresh={fetchInventories}
+              ListEmptyComponent={
+                <Text style={{ textAlign: 'center', color: '#999', marginTop: 40 }}>在庫報告がありません。</Text>
+              }
+            />
+          )
         )}
 
       </View>

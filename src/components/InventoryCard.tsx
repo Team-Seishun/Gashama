@@ -2,16 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getProfileIconSource } from '@/features/profile/profile-icons';
 
 export type ReportItem = {
   id: string;
   created_at: string;
   photo_url: string;
   stock_status: number; // 0: 売り切れ, 1: 残りわずか, 2: 在庫あり
-  stores: { name: string } | null;
-  gachapons: { name: string } | null;
-  gachapon_items: { name: string } | null;
-  profiles: { nickname: string } | null;
+  stores: any;
+  gachapons: any;
+  gachapon_items: any;
+  profiles: any;
 };
 
 type InventoryCardProps = {
@@ -42,22 +43,35 @@ export const formatTimeAgo = (dateString: string) => {
 };
 
 export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
+  const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+  const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
+  const gachapon = Array.isArray(item.gachapons) ? item.gachapons[0] : item.gachapons;
+  const gachaponItem = Array.isArray(item.gachapon_items) ? item.gachapon_items[0] : item.gachapon_items;
+
   const statusInfo = getStockStatusInfo(item.stock_status);
-  const itemName = item.gachapon_items?.name
-    ? `${item.gachapons?.name || ''} (${item.gachapon_items.name})`
-    : item.gachapons?.name || 'ガチャガチャ名なし';
+  const itemName = gachaponItem?.name
+    ? `${gachapon?.name || ''} (${gachaponItem.name})`
+    : gachapon?.name || 'ガチャガチャ名なし';
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.userInfo}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: '#F0F0F0' }]}>
-            <Ionicons name="person" size={20} color="#999" />
+          <View style={[styles.avatarPlaceholder, { backgroundColor: '#F0F0F0', overflow: 'hidden' }]}>
+            {profile?.icon_image ? (
+              <Image
+                source={getProfileIconSource(profile.icon_image)}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+              />
+            ) : (
+              <Ionicons name="person" size={20} color="#999" />
+            )}
           </View>
           <View style={styles.userNameContainer}>
-            <Text style={styles.userName}>{item.profiles?.nickname || 'ユーザー'}</Text>
+            <Text style={styles.userName}>{profile?.nickname || 'ユーザー'}</Text>
             <View style={styles.placeBadge}>
-              <Text style={styles.placeBadgeText}>{item.stores?.name || '店舗名未設定'}</Text>
+              <Text style={styles.placeBadgeText}>{store?.name || '店舗名未設定'}</Text>
             </View>
           </View>
         </View>
