@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { 
   StyleSheet, 
@@ -20,7 +20,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { ReviewModal } from '@/features/chat/components/ReviewModal';
 import { MessageBubble } from '@/features/chat/components/MessageBubble';
-import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
+import { ChatMessage } from '@/features/chat/types';
 import { useChatRoom } from '@/features/chat/hooks/useChatRoom';
 
 const CHAT_COLORS = {
@@ -42,11 +42,6 @@ const CHAT_COLORS = {
   waitingOrange: '#D95C14'
 };
 
-const CONSTANTS = {
-  MOCK_LOADING_TIME: 1000,
-  MAX_COMMENT_LENGTH: 1000,
-};
-
 export default function ChatRoomScreen() {
   const router = useRouter();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
@@ -56,7 +51,6 @@ export default function ChatRoomScreen() {
   
   const {
     messages,
-    setMessages,
     partner,
     myProfile,
     chatRoom,

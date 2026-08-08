@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, ScrollView, Dimensions, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
@@ -116,8 +116,10 @@ export default function PostScreen() {
         .neq('id', session.user.id)
         .limit(10);
         
+      // eslint-disable-next-line react-hooks/purity
+      const randomIndex = profilesData ? Math.floor(Math.random() * profilesData.length) : 0;
       const partnerId = profilesData && profilesData.length > 0 
-        ? profilesData[Math.floor(Math.random() * profilesData.length)].id 
+        ? profilesData[randomIndex].id 
         : session.user.id;
 
       // 外部キー制約エラー回避のため、既存の trades または chat_rooms から実在する trade_id を取得

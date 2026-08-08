@@ -102,7 +102,7 @@ export default function ChatListScreen() {
     useCallback(() => {
       if (!session?.user.id) return;
       fetchChatRooms(session.user.id);
-    }, [session?.user.id, fetchChatRooms])
+    }, [session, fetchChatRooms])
   );
 
   useEffect(() => {
