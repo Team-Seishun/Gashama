@@ -33,6 +33,7 @@ const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
       if (error) {
         console.error('Error fetching trades:', error);
+        setErrorMsg('データの取得に失敗しました');
       } else if (data) {
         setTrades(data as Trade[]);
       }
