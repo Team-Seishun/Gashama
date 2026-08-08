@@ -147,7 +147,7 @@ export default function MapScreen() {
 
   // フッターのMapタブを再度押した時の処理
   useEffect(() => {
-    const unsubscribe = navigation.addListener('tabPress', (e) => {
+    const unsubscribe = (navigation as any).addListener('tabPress', (e: any) => {
       // 既にMap画面を開いている状態でMapタブが押されたら
       if (navigation.isFocused()) {
         bottomSheetRef.current?.close();
@@ -904,7 +904,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCloseArea: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   modalContent: {
     width: '100%',
