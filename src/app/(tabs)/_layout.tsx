@@ -3,10 +3,10 @@ import { Tabs } from 'expo-router';
 import TabBar from '@/components/tab-bar';
 import { appTabDefinitions } from '@/constants/app-tabs';
 
-export default function AppTabs() {
+export default function TabLayout() {
   return (
     <Tabs
-      tabBar={(props) => <TabBar {...(props as any)} />}
+      tabBar={(props: any) => <TabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       {appTabDefinitions.map((tab) => (
