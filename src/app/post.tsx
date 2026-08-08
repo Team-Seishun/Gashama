@@ -76,6 +76,7 @@ export default function PostScreen() {
   const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>('trade');
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // 検索キーワードの状態
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -84,6 +85,7 @@ export default function PostScreen() {
   const fetchInventoryReports = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const { data, error } = await supabase
         .from('reports')
         .select(`
@@ -102,6 +104,7 @@ export default function PostScreen() {
       setInventories((data as unknown as ReportItem[]) || []);
     } catch (error) {
       console.error('在庫報告の取得に失敗しました:', error);
+      setLoadError('在庫報告の読み込みに失敗しました。');
     } finally {
       setLoading(false);
     }
@@ -359,6 +362,14 @@ export default function PostScreen() {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#FF7A00" />
           </View>
+        ) : loadError ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorTitle}>読み込みに失敗しました</Text>
+            <Text style={styles.errorText}>{loadError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={fetchInventoryReports}>
+              <Text style={styles.retryButtonText}>再読み込み</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <FlatList
             data={filteredInventories}
@@ -483,6 +494,35 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#FF7A00',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   emptyContainer: {
     paddingVertical: 40,
