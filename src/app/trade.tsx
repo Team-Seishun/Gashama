@@ -64,7 +64,11 @@ export default function TradeScreen() {
   };
 
   useEffect(() => {
-    fetchTrades();
+    // 1. 初回データを取得する関数を中で定義して即時実行する
+    const loadInitialData = async () => {
+      await fetchTrades();
+    };
+    loadInitialData();
 
     const channel = supabase
       .channel('schema-db-changes')
