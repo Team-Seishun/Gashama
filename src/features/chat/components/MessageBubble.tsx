@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 
@@ -8,9 +8,10 @@ type MessageBubbleProps = {
   isOwnMessage: boolean;
   isSystemMessage?: boolean;
   imageUrl?: string | null;
+  onImagePress?: (imageUrl: string) => void;
 };
 
-export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, imageUrl }: MessageBubbleProps) {
+export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, imageUrl, onImagePress }: MessageBubbleProps) {
   if (isSystemMessage) {
     const displayText = text.replace('【システムメッセージ】\n', '');
     return (
@@ -30,7 +31,9 @@ export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, image
         <Text style={[styles.timeText, { marginRight: 8 }]}>{time}</Text>
         <View style={[styles.messageBubbleRight, imageUrl ? { backgroundColor: 'transparent', padding: 0 } : null]}>
           {imageUrl && (
-            <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+            <TouchableOpacity activeOpacity={0.8} onPress={() => onImagePress?.(imageUrl)}>
+              <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+            </TouchableOpacity>
           )}
           {text ? (
             <View style={imageUrl ? [styles.messageBubbleRight, { marginTop: 4 }] : null}>
@@ -51,7 +54,9 @@ export function MessageBubble({ text, time, isOwnMessage, isSystemMessage, image
       </View>
       <View style={[styles.messageBubbleLeft, imageUrl ? { backgroundColor: 'transparent', padding: 0 } : null]}>
         {imageUrl && (
-          <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+          <TouchableOpacity activeOpacity={0.8} onPress={() => onImagePress?.(imageUrl)}>
+            <Image source={{ uri: imageUrl }} style={styles.messageImage} contentFit="contain" />
+          </TouchableOpacity>
         )}
         {text ? (
           <View style={imageUrl ? [styles.messageBubbleLeft, { marginTop: 4 }] : null}>
@@ -141,6 +146,7 @@ const styles = StyleSheet.create({
     color: '#555',
     lineHeight: 18,
     fontWeight: '500',
+    flexShrink: 1,
   },
   systemTimeText: {
     fontSize: 10,

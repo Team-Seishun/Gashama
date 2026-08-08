@@ -1,29 +1,43 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, ScrollView, Dimensions, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TextInput, TouchableOpacity, ScrollView, Dimensions, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { supabase } from '@/utils/supabase';
+import { useAuth } from '@/features/auth/hooks/useAuth';
 
 // ----------------------------------------------------
 // モックデータの生成
 // ----------------------------------------------------
+const MOCK_GACHAPON_ID = 'c16c1902-ce13-452d-819e-386dc46b3abc';
+const ITEM_MOCKS = [
+  { id: '00f76fe1-6c85-49e6-8eed-cd93d2480001', gachapon_id: MOCK_GACHAPON_ID, name: 'アメ B' },
+  { id: '2c1f8219-ff2d-462d-81db-2b0e298e0002', gachapon_id: MOCK_GACHAPON_ID, name: 'アメ A' },
+  { id: '38961dd1-6fd2-4720-b1ab-4343c0d00003', gachapon_id: MOCK_GACHAPON_ID, name: 'ビーフ' },
+  { id: '5e3b10c5-4394-4832-aae7-bf7065520004', gachapon_id: MOCK_GACHAPON_ID, name: 'カリエス A' },
+  { id: '925ec6c6-2ee0-420e-9dd0-c101c9300005', gachapon_id: MOCK_GACHAPON_ID, name: 'ミカン' },
+  { id: 'c9ef6bdd-806e-415b-b0b5-891e3e690006', gachapon_id: MOCK_GACHAPON_ID, name: 'カリエス B' },
+];
+
 const TRADE_BASES = [
   { 
     user: 'Kaito_Gacha', 
     place: '池袋サンシャイン付近', 
     distTime: '200m • 5分前', 
-    offer: 'ハチワレ (おやすみ)', 
-    request: 'うさぎ (スポーツ)', 
+    offerItem: ITEM_MOCKS[0], 
+    requestItem: ITEM_MOCKS[1], 
+    gachapon_id: MOCK_GACHAPON_ID,
     status: 'active',
     info: '※相手が申請を承認するとマッチングが成立し、チャットが解放されます',
-    userColor: '#E1F5FE' // プレースホルダーアイコンの色
+    userColor: '#E1F5FE'
   },
   { 
     user: 'Mina_Chan', 
     place: '渋谷駅', 
     distTime: '1.2km • 15分前', 
-    offer: 'モモンガ (立ち姿)', 
-    request: 'ちいかわ (ラーメン)', 
+    offerItem: ITEM_MOCKS[4], 
+    requestItem: ITEM_MOCKS[3], 
+    gachapon_id: MOCK_GACHAPON_ID,
     status: 'trading',
     userColor: '#FCE4EC'
   },
@@ -31,17 +45,27 @@ const TRADE_BASES = [
     user: 'GachaMaster_99', 
     place: '秋葉原駅周辺', 
     distTime: '3.6km • 1時間前', 
-    offer: 'サンリオコラボ A', 
-    request: 'サンリオコラボ D', 
+    offerItem: ITEM_MOCKS[3], 
+    requestItem: ITEM_MOCKS[5], 
+    gachapon_id: MOCK_GACHAPON_ID,
     status: 'active',
     userColor: '#E8F5E9'
   },
 ];
 
-const MOCK_TRADES = Array.from({ length: 20 }).map((_, i) => ({
-  id: `trade_${i}`,
-  ...TRADE_BASES[i % 3],
-}));
+const MY_INVENTORY_MOCKS = [
+  { id: 'inv_1', item: ITEM_MOCKS[1], isUsed: false }, // アメ A
+  { id: 'inv_2', item: ITEM_MOCKS[2], isUsed: true },  // ビーフ (他で申請中)
+  { id: 'inv_3', item: ITEM_MOCKS[5], isUsed: false }, // カリエス B
+];
+
+const MOCK_TRADES = Array.from({ length: 20 }).map((_, i) => {
+  const hex = i.toString(16).padStart(12, '0');
+  return {
+    id: `00000000-0000-0000-0000-${hex}`,
+    ...TRADE_BASES[i % 3],
+  };
+});
 
 const INVENTORY_BASES = [
   { shop: 'ガシャポンバンダイオフィシャルショップ', itemName: 'ちいかわ 目印チャーム2', status: '在庫あり', statusColor: '#FF7A00', time: '10分前', user: 'UserA' },
@@ -59,7 +83,184 @@ const MOCK_INVENTORIES = Array.from({ length: 20 }).map((_, i) => ({
 // ----------------------------------------------------
 export default function PostScreen() {
   const router = useRouter();
+  const { session } = useAuth();
   const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>('trade');
+  const [isApplying, setIsApplying] = useState(false);
+  const [selectedTradeForApply, setSelectedTradeForApply] = useState<typeof MOCK_TRADES[0] | null>(null);
+
+  const handleConfirmApplyTrade = async (trade: typeof MOCK_TRADES[0], myItem: typeof ITEM_MOCKS[0]) => {
+    // 1. gachapon_id が一致するか確認
+    if (trade.gachapon_id !== myItem.gachapon_id) {
+      alert('選択したアイテムのガシャポンシリーズが一致しません。');
+      return;
+    }
+    // 2. アイテムID が一致するか確認 (相手が欲しいもの === 自分が提供するもの)
+    if (trade.requestItem.id !== myItem.id) {
+      alert(`相手が希望しているアイテム（${trade.requestItem.name}）と一致しません。`);
+      return;
+    }
+
+    // 審査通過
+    setSelectedTradeForApply(null);
+    await handleApplyTrade(trade);
+  };
+
+  const handleApplyTrade = async (trade: typeof MOCK_TRADES[0]) => {
+    if (!session?.user.id || isApplying) return;
+    setIsApplying(true);
+    try {
+      // テスト用：DBから自分以外のユーザーを取得してランダムな相手とする
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id')
+        .neq('id', session.user.id)
+        .limit(10);
+        
+      const partnerId = profilesData && profilesData.length > 0 
+        ? profilesData[Math.floor(Math.random() * profilesData.length)].id 
+        : session.user.id;
+
+      // 外部キー制約エラー回避のため、既存の trades または chat_rooms から実在する trade_id を取得
+      const { data: existingTrade } = await supabase
+        .from('trades')
+        .select('id')
+        .limit(1)
+        .single();
+        
+      let realTradeId = existingTrade?.id;
+      
+      if (!realTradeId) {
+        const { data: validRoom } = await supabase
+          .from('chat_rooms')
+          .select('trade_id')
+          .not('trade_id', 'is', null)
+          .limit(1)
+          .single();
+        realTradeId = validRoom?.trade_id;
+      }
+
+      // どちらからも取得できない場合はエラーとする
+      if (!realTradeId) {
+        alert('DBに有効なtradeデータがありません。テスト用にSupabaseでtradesテーブルに1件データを作成してください。');
+        setIsApplying(false);
+        return;
+      }
+
+      // 既に同じ相手とのチャットがあるか確認（モックなのでtrade_idの重複を避けるため相手で判定）
+      const { data: existingRoom } = await supabase
+        .from('chat_rooms')
+        .select('id')
+        .eq('user_1_id', session.user.id)
+        .eq('user_2_id', partnerId)
+        .single();
+
+      if (existingRoom) {
+        router.push(`/chat-room?roomId=${existingRoom.id}`);
+        return;
+      }
+
+      // なければ新規作成
+      const { data: newRoom, error } = await supabase
+        .from('chat_rooms')
+        .insert({
+          trade_id: realTradeId,
+          user_1_id: session.user.id,
+          user_2_id: partnerId,
+          status: 'pending'
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      // 最初のシステムメッセージを送信
+      await supabase
+        .from('chat_messages')
+        .insert({
+          room_id: newRoom.id,
+          sender_id: session.user.id,
+          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
+        });
+
+      router.push(`/chat-room?roomId=${newRoom.id}`);
+    } catch (e) {
+      console.error(e);
+      alert('交換申請の送信に失敗しました');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleReceiveApplyTrade = async () => {
+    if (!session?.user.id || isApplying) return;
+    setIsApplying(true);
+    try {
+      // テスト用：DBから自分以外のユーザーを取得して相手(申請者)とする
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id')
+        .neq('id', session.user.id)
+        .limit(10);
+        
+      const partnerId = profilesData && profilesData.length > 0 
+        ? profilesData[Math.floor(Math.random() * profilesData.length)].id 
+        : session.user.id;
+
+      // 既存の trades または chat_rooms から実在する trade_id を取得
+      const { data: existingTrade } = await supabase
+        .from('trades')
+        .select('id')
+        .limit(1)
+        .single();
+        
+      let realTradeId = existingTrade?.id;
+      if (!realTradeId) {
+        const { data: validRoom } = await supabase
+          .from('chat_rooms')
+          .select('trade_id')
+          .not('trade_id', 'is', null)
+          .limit(1)
+          .single();
+        realTradeId = validRoom?.trade_id;
+      }
+
+      if (!realTradeId) {
+        alert('DBに有効なtradeデータがありません。');
+        setIsApplying(false);
+        return;
+      }
+
+      // なければ新規作成 (user_1_id = 相手, user_2_id = 自分)
+      const { data: newRoom, error } = await supabase
+        .from('chat_rooms')
+        .insert({
+          trade_id: realTradeId,
+          user_1_id: partnerId,
+          user_2_id: session.user.id,
+          status: 'pending'
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+
+      // 最初のシステムメッセージを送信 (相手からのメッセージとして)
+      await supabase
+        .from('chat_messages')
+        .insert({
+          room_id: newRoom.id,
+          sender_id: partnerId,
+          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
+        });
+
+      router.push(`/chat-room?roomId=${newRoom.id}`);
+    } catch (e) {
+      console.error(e);
+      alert('テストチャットの作成に失敗しました');
+    } finally {
+      setIsApplying(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -99,7 +300,7 @@ export default function PostScreen() {
           <View style={styles.tradeItemBadgeOffer}>
             <Text style={styles.tradeItemBadgeText}>出</Text>
           </View>
-          <Text style={styles.tradeItemName} numberOfLines={1}>{item.offer}</Text>
+          <Text style={styles.tradeItemName} numberOfLines={1}>{item.offerItem.name}</Text>
           <Image
             source={{ uri: `https://picsum.photos/seed/${item.id}_offer/200/200` }}
             style={[styles.itemImagePlaceholder, { overflow: 'hidden' }]}
@@ -117,7 +318,7 @@ export default function PostScreen() {
           <View style={styles.tradeItemBadgeRequest}>
             <Text style={styles.tradeItemBadgeTextRequest}>求</Text>
           </View>
-          <Text style={styles.tradeItemName} numberOfLines={1}>{item.request}</Text>
+          <Text style={styles.tradeItemName} numberOfLines={1}>{item.requestItem.name}</Text>
           <Image
             source={{ uri: `https://picsum.photos/seed/${item.id}_req/200/200` }}
             style={[styles.itemImagePlaceholder, { overflow: 'hidden' }]}
@@ -131,9 +332,14 @@ export default function PostScreen() {
         <>
           <TouchableOpacity 
             style={styles.actionButtonActive}
-            onPress={() => router.push('/chat-room?type=sent')}
+            onPress={() => setSelectedTradeForApply(item)}
+            disabled={isApplying}
           >
-            <Text style={styles.actionButtonTextActive}>交換申請を送る</Text>
+            {isApplying ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.actionButtonTextActive}>交換申請を送る</Text>
+            )}
           </TouchableOpacity>
           {item.info && (
             <Text style={styles.infoText}>{item.info}</Text>
@@ -227,6 +433,15 @@ export default function PostScreen() {
               <Text style={styles.tagText}>サンリオ (シナモロール)</Text>
             </View>
           </ScrollView>
+
+          {/* デバッグ用：自分宛ての申請を受信する */}
+          <TouchableOpacity 
+            style={{ backgroundColor: '#2E7D32', padding: 12, borderRadius: 8, marginHorizontal: 20, marginTop: 10, alignItems: 'center' }}
+            onPress={handleReceiveApplyTrade}
+            disabled={isApplying}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>【テスト】自分宛ての交換申請を受信する</Text>
+          </TouchableOpacity>
         </View>
 
         {/* リスト表示 */}
@@ -247,7 +462,55 @@ export default function PostScreen() {
             showsVerticalScrollIndicator={false}
           />
         )}
+
       </View>
+
+      {/* 在庫選択モーダル */}
+      <Modal
+        visible={!!selectedTradeForApply}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedTradeForApply(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalCloseArea} onPress={() => setSelectedTradeForApply(null)} />
+          <View style={styles.modalContentWrapper}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>提供するアイテムを選択</Text>
+              <TouchableOpacity onPress={() => setSelectedTradeForApply(null)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              相手の希望: <Text style={{fontWeight: 'bold', color: '#D95C14'}}>{selectedTradeForApply?.requestItem.name}</Text>
+            </Text>
+            
+            <ScrollView style={styles.inventoryList}>
+              {MY_INVENTORY_MOCKS.map((inv) => (
+                <TouchableOpacity 
+                  key={inv.id} 
+                  style={[styles.inventorySelectItem, inv.isUsed && { opacity: 0.5 }]}
+                  disabled={inv.isUsed}
+                  onPress={() => handleConfirmApplyTrade(selectedTradeForApply!, inv.item)}
+                >
+                  <Image
+                    source={{ uri: `https://picsum.photos/seed/${inv.item.id}/100/100` }}
+                    style={styles.inventorySelectItemImage}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inventorySelectItemName}>{inv.item.name}</Text>
+                    {inv.isUsed && (
+                      <Text style={{ fontSize: 12, color: '#D95C14', marginTop: 4, fontWeight: 'bold' }}>
+                        ※他のトレードで申請中
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -486,6 +749,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCloseArea: {
+    flex: 1,
+  },
+  modalContentWrapper: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  inventoryList: {
+    // ScrollViewの高さは親に依存させる
+  },
+  inventorySelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  inventorySelectItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  inventorySelectItemName: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   actionButtonDisabled: {
     backgroundColor: '#E0E0E0',
