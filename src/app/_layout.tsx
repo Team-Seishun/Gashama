@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, Slot, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Slot, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
@@ -14,8 +14,8 @@ SplashScreen.preventAutoHideAsync();
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { session, initialized } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  
+  
   const [profileState, setProfileState] = useState({ checked: false, hasProfile: false, sessionId: null as string | null });
 
   useEffect(() => {
