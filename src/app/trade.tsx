@@ -103,7 +103,7 @@ const [errorMsg, setErrorMsg] = useState<string | null>(null);
         }
         ListEmptyComponent={
           <View style={styles.centerContainer}>
-            <Text style={styles.emptyText}>トレード募集がありません</Text>
+            {errorMsg ? errorMsg : 'トレード募集がありません'}
           </View>
         }
       />
