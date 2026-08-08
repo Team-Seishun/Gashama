@@ -13,9 +13,6 @@ type InitialParams = {
 };
 
 export function useMasterData(params?: InitialParams) {
-  const [stores, setStores] = useState<StoreItem[]>([]);
-  const [gachapons, setGachapons] = useState<GachaponItem[]>([]);
-  const [items, setItems] = useState<ItemType[]>([]);
   const [fetching, setFetching] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -31,40 +28,34 @@ export function useMasterData(params?: InitialParams) {
     setFetching(true);
     setLoadError(null);
     try {
-      const [storesRes, gachaponsRes, itemsRes] = await Promise.all([
-        supabase.from('stores').select('id, name').limit(100),
-        supabase.from('gachapons').select('id, name').limit(100),
-        supabase.from('gachapon_items').select('id, name').limit(100),
-      ]);
-
-      if (storesRes.error) throw storesRes.error;
-      if (gachaponsRes.error) throw gachaponsRes.error;
-      if (itemsRes.error) throw itemsRes.error;
-
-      const storeData = storesRes.data || [];
-      const gachaponData = gachaponsRes.data || [];
-      const itemData = itemsRes.data || [];
-
-      setStores(storeData);
-      setGachapons(gachaponData);
-      setItems(itemData);
+      const promises = [];
 
       if (storeId) {
-        const matched = storeData.find((s) => s.id === storeId);
-        if (matched) setSelectedStore(matched);
-      } else if (storeData.length > 0) {
-        setSelectedStore(storeData[0]);
+        promises.push(
+          supabase.from('stores').select('id, name').eq('id', storeId).single().then(res => {
+            if (res.data) setSelectedStore(res.data);
+          })
+        );
       }
-
+      
       if (gachaponId) {
-        const matched = gachaponData.find((g) => g.id === gachaponId);
-        if (matched) setSelectedGachapon(matched);
+        promises.push(
+          supabase.from('gachapons').select('id, name').eq('id', gachaponId).single().then(res => {
+            if (res.data) setSelectedGachapon(res.data);
+          })
+        );
       }
 
       if (itemId) {
-        const matched = itemData.find((i) => i.id === itemId);
-        if (matched) setSelectedItem(matched);
+        promises.push(
+          supabase.from('gachapon_items').select('id, name').eq('id', itemId).single().then(res => {
+            if (res.data) setSelectedItem(res.data);
+          })
+        );
       }
+
+      await Promise.all(promises);
+
     } catch (error: any) {
       console.error('マスターデータ取得エラー:', error);
       setLoadError(error?.message ?? '店舗やガチャ情報の取得に失敗しました。');
@@ -82,9 +73,6 @@ export function useMasterData(params?: InitialParams) {
   }, [fetchMasterData]);
 
   return {
-    stores,
-    gachapons,
-    items,
     fetching,
     loadError,
     selectedStore,

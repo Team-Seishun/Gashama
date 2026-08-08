@@ -17,13 +17,7 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
-
-// モーダル選択用共通型
-type ModalOptionItem = {
-  id: string;
-  name: string;
-  raw: StoreItem | GachaponItem | ItemType;
-};
+import SearchMasterView, { SearchMasterMode, SearchResult } from '@/components/search-master-view';
 
 export default function ReportCreateScreen() {
   const router = useRouter();
@@ -59,9 +53,6 @@ export default function ReportCreateScreen() {
 
   // カスタムフックでマスターデータを取得・管理
   const {
-    stores,
-    gachapons,
-    items,
     fetching,
     loadError,
     selectedStore,
@@ -78,7 +69,7 @@ export default function ReportCreateScreen() {
   });
 
   // モーダルの開閉状態
-  const [modalType, setModalType] = useState<'store' | 'gachapon' | 'item' | null>(null);
+  const [modalType, setModalType] = useState<SearchMasterMode | null>(null);
 
   const [stockStatus, setStockStatus] = useState<number>(2); // 2: 在庫あり, 1: 残りわずか, 0: 売り切れ
   const [loading, setLoading] = useState(false);
@@ -206,18 +197,11 @@ export default function ReportCreateScreen() {
   };
 
   // モーダルで項目選択時
-  const handleSelectModalItem = (rawItem: StoreItem | GachaponItem | ItemType) => {
-    if (modalType === 'store') setSelectedStore(rawItem as StoreItem);
-    if (modalType === 'gachapon') setSelectedGachapon(rawItem as GachaponItem);
-    if (modalType === 'item') setSelectedItem(rawItem as ItemType);
+  const handleSelectSearchResult = (result: SearchResult) => {
+    if (result.type === 'store') setSelectedStore(result.raw);
+    if (result.type === 'gachapon') setSelectedGachapon(result.raw);
+    if (result.type === 'item') setSelectedItem(result.raw);
     setModalType(null);
-  };
-
-  const getModalData = (): ModalOptionItem[] => {
-    if (modalType === 'store') return stores.map((s) => ({ id: s.id, name: s.name, raw: s }));
-    if (modalType === 'gachapon') return gachapons.map((g) => ({ id: g.id, name: g.name, raw: g }));
-    if (modalType === 'item') return items.map((i) => ({ id: i.id, name: i.name, raw: i }));
-    return [];
   };
 
   if (fetching) {
@@ -361,35 +345,15 @@ export default function ReportCreateScreen() {
         </View>
       </ScrollView>
 
-      {/* 選択モーダル */}
-      <Modal visible={modalType !== null} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'store' && '店舗の選択'}
-                {modalType === 'gachapon' && 'ガチャガチャ（商品）の選択'}
-                {modalType === 'item' && '出たアイテムの選択'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalType(null)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <FlashList<ModalOptionItem>
-              data={getModalData()}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => handleSelectModalItem(item.raw)}
-                >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
+      {/* 選択モーダル (全画面検索) */}
+      <Modal visible={modalType !== null} animationType="slide" transparent={false}>
+        {modalType && (
+          <SearchMasterView 
+            mode={modalType} 
+            onSelect={handleSelectSearchResult} 
+            onClose={() => setModalType(null)} 
+          />
+        )}
       </Modal>
     </KeyboardAvoidingView>
   );
