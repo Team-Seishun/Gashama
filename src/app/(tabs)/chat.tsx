@@ -32,20 +32,32 @@ export default function ChatListScreen() {
           roomsData.map(async (room) => {
             const partnerId = room.user_1_id === userId ? room.user_2_id : room.user_1_id;
             
-            // 相手のプロフィールを取得
-            const { data: partnerData } = await supabase
-              .from('profiles')
-              .select('id, nickname, icon_image')
-              .eq('id', partnerId)
-              .single();
-
-            // 最新のメッセージを1件取得
-            const { data: messagesData } = await supabase
-              .from('chat_messages')
-              .select('message, image_url, created_at')
-              .eq('room_id', room.id)
-              .order('created_at', { ascending: false })
-              .limit(1);
+            const [
+              { data: partnerData },
+              { data: messagesData },
+              { count: unreadCount }
+            ] = await Promise.all([
+              // 相手のプロフィールを取得
+              supabase
+                .from('profiles')
+                .select('id, nickname, icon_image')
+                .eq('id', partnerId)
+                .single(),
+              // 最新のメッセージを1件取得
+              supabase
+                .from('chat_messages')
+                .select('message, image_url, created_at')
+                .eq('room_id', room.id)
+                .order('created_at', { ascending: false })
+                .limit(1),
+              // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
+              supabase
+                .from('chat_messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('room_id', room.id)
+                .eq('is_read', false)
+                .neq('sender_id', userId)
+            ]);
 
             let latestMessageText = 'まだメッセージはありません';
             if (messagesData && messagesData.length > 0) {
@@ -56,14 +68,6 @@ export default function ChatListScreen() {
                 latestMessageText = '写真を送信しました';
               }
             }
-            
-            // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
-            const { count: unreadCount } = await supabase
-              .from('chat_messages')
-              .select('*', { count: 'exact', head: true })
-              .eq('room_id', room.id)
-              .eq('is_read', false)
-              .neq('sender_id', userId);
 
             return {
               ...room,
@@ -112,7 +116,14 @@ export default function ChatListScreen() {
       .channel('chat_list_updates')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'chat_messages' },
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        () => {
+          fetchChatRooms(session.user.id);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
         () => {
           fetchChatRooms(session.user.id);
         }
