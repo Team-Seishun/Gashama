@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Modal
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
@@ -22,6 +23,30 @@ import { ReviewModal } from '@/features/chat/components/ReviewModal';
 import { MessageBubble } from '@/features/chat/components/MessageBubble';
 import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
 import { useChatRoom } from '@/features/chat/hooks/useChatRoom';
+
+const CHAT_COLORS = {
+  primary: '#FF7A00',
+  primaryDisabled: '#FFB870',
+  primaryLight: '#FFF3E0',
+  textMain: '#333',
+  textSub: '#666',
+  textMuted: '#999',
+  background: '#fff',
+  backgroundSub: '#FAFAFA',
+  backgroundBadge: '#F5F5F5',
+  border: '#F0F0F0',
+  borderDark: '#E0E0E0',
+  accentBlue: '#007AFF',
+  accentBlueLight: '#E1F5FE',
+  accentBrown: '#8D6E63',
+  accentBrownDisabled: '#A1887F',
+  waitingOrange: '#D95C14'
+};
+
+const CONSTANTS = {
+  MOCK_LOADING_TIME: 1000,
+  MAX_COMMENT_LENGTH: 1000,
+};
 
 export default function ChatRoomScreen() {
   const router = useRouter();
@@ -272,6 +297,24 @@ export default function ChatRoomScreen() {
     );
   }
 
+  // 承認ハンドラ
+  const handleApprove = useCallback(() => {
+    setIsApproving(true);
+    setTimeout(() => {
+      setIsApproving(false);
+      setIsApproved(true);
+    }, CONSTANTS.MOCK_LOADING_TIME);
+  }, []);
+
+  // 評価送信ハンドラ
+  const handleSubmitReview = useCallback(() => {
+    setIsReviewSubmitting(true);
+    setTimeout(() => {
+      setIsReviewSubmitting(false);
+      setIsReviewModalVisible(false);
+    }, CONSTANTS.MOCK_LOADING_TIME);
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView 
@@ -513,11 +556,11 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: CHAT_COLORS.background,
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: CHAT_COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -526,7 +569,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: CHAT_COLORS.border,
   },
   backButton: {
     padding: 4,
@@ -547,10 +590,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   completeButton: {
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -561,7 +604,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   completeButtonText: {
-    color: '#fff',
+    color: CHAT_COLORS.background,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -666,24 +709,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: CHAT_COLORS.border,
   },
   quickReplyScroll: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   quickReplyBadge: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: CHAT_COLORS.borderDark,
   },
   quickReplyText: {
     fontSize: 13,
-    color: '#666',
+    color: CHAT_COLORS.textSub,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -696,27 +739,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: CHAT_COLORS.backgroundBadge,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: CHAT_COLORS.borderDark,
     height: 40,
   },
   inputWrapperDisabled: {
-    backgroundColor: '#FAFAFA',
-    borderColor: '#F0F0F0',
+    backgroundColor: CHAT_COLORS.backgroundSub,
+    borderColor: CHAT_COLORS.border,
   },
   textInput: {
     flex: 1,
     paddingHorizontal: 16,
     fontSize: 14,
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   sendButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FF7A00',
+    backgroundColor: CHAT_COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 12,
@@ -831,7 +874,7 @@ const styles = StyleSheet.create({
   proposedItemName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: CHAT_COLORS.textMain,
   },
   approvalButtonsRow: {
     flexDirection: 'row',

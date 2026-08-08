@@ -204,8 +204,33 @@ export default function MapScreen() {
         return;
       }
 
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation(currentLocation);
+      // 1. まずキャッシュされた前回位置情報を素早く取得してマップを動かす
+      let lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        setLocation(lastKnown);
+        mapRef.current?.animateToRegion({
+          latitude: lastKnown.coords.latitude,
+          longitude: lastKnown.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
+
+      // 2. 裏で高精度な現在地を取得し、完了次第さらに精度を上げる
+      try {
+        let currentLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setLocation(currentLocation);
+        mapRef.current?.animateToRegion({
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      } catch (e) {
+        console.warn('getCurrentPositionAsync failed, using last known position', e);
+      }
     })();
   }, []);
 
