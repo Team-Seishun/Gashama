@@ -9,6 +9,8 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
 import { ProfileContext } from '@/features/profile/contexts/ProfileContext';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 SplashScreen.preventAutoHideAsync();
 
 export default function TabLayout() {
@@ -111,14 +113,16 @@ export default function TabLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <ProfileContext.Provider value={{
-        hasProfile: profileState.hasProfile,
-        setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
-      }}>
-        <AnimatedSplashOverlay />
-        {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
-      </ProfileContext.Provider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ProfileContext.Provider value={{
+          hasProfile: profileState.hasProfile,
+          setHasProfile: (hasProfile) => setProfileState(prev => ({ ...prev, hasProfile }))
+        }}>
+          <AnimatedSplashOverlay />
+          {!session || !profileState.hasProfile ? <Slot /> : <AppTabs />}
+        </ProfileContext.Provider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
