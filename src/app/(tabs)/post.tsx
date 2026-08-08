@@ -191,76 +191,6 @@ export default function PostScreen() {
     }
   };
 
-  const handleReceiveApplyTrade = async () => {
-    if (!session?.user.id || isApplying) return;
-    setIsApplying(true);
-    try {
-      // テスト用：DBから自分以外のユーザーを取得して相手(申請者)とする
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id')
-        .neq('id', session.user.id)
-        .limit(10);
-        
-      const partnerId = profilesData && profilesData.length > 0 
-        ? profilesData[Math.floor(Math.random() * profilesData.length)].id 
-        : session.user.id;
-
-      // 既存の trades または chat_rooms から実在する trade_id を取得
-      const { data: existingTrade } = await supabase
-        .from('trades')
-        .select('id')
-        .limit(1)
-        .single();
-        
-      let realTradeId = existingTrade?.id;
-      if (!realTradeId) {
-        const { data: validRoom } = await supabase
-          .from('chat_rooms')
-          .select('trade_id')
-          .not('trade_id', 'is', null)
-          .limit(1)
-          .single();
-        realTradeId = validRoom?.trade_id;
-      }
-
-      if (!realTradeId) {
-        alert('DBに有効なtradeデータがありません。');
-        setIsApplying(false);
-        return;
-      }
-
-      // なければ新規作成 (user_1_id = 相手, user_2_id = 自分)
-      const { data: newRoom, error } = await supabase
-        .from('chat_rooms')
-        .insert({
-          trade_id: realTradeId,
-          user_1_id: partnerId,
-          user_2_id: session.user.id,
-          status: 'pending'
-        })
-        .select('id')
-        .single();
-
-      if (error) throw error;
-
-      // 最初のシステムメッセージを送信 (相手からのメッセージとして)
-      await supabase
-        .from('chat_messages')
-        .insert({
-          room_id: newRoom.id,
-          sender_id: partnerId,
-          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
-        });
-
-      router.push(`/chat-room?roomId=${newRoom.id}`);
-    } catch (e) {
-      console.error(e);
-      alert('テストチャットの作成に失敗しました');
-    } finally {
-      setIsApplying(false);
-    }
-  };
 
   useFocusEffect(
     useCallback(() => {
@@ -434,14 +364,6 @@ export default function PostScreen() {
             </View>
           </ScrollView>
 
-          {/* デバッグ用：自分宛ての申請を受信する */}
-          <TouchableOpacity 
-            style={{ backgroundColor: '#2E7D32', padding: 12, borderRadius: 8, marginHorizontal: 20, marginTop: 10, alignItems: 'center' }}
-            onPress={handleReceiveApplyTrade}
-            disabled={isApplying}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>【テスト】自分宛ての交換申請を受信する</Text>
-          </TouchableOpacity>
         </View>
 
         {/* リスト表示 */}
