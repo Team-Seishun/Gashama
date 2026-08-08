@@ -39,6 +39,14 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
         ]);
 
         if (roomRes.error || !roomRes.data) throw roomRes.error;
+
+        if (myProfileRes.error) {
+          console.error('Failed to fetch my profile:', myProfileRes.error);
+        }
+        if (messagesRes.error) {
+          console.error('Failed to fetch messages:', messagesRes.error);
+        }
+
         if (!isMounted) return;
 
         setChatRoom(roomRes.data);

@@ -2,7 +2,8 @@ import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SearchResult = {
@@ -114,13 +115,10 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      <FlatList
+      <FlashList
         data={results}
         keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.id}
-        initialNumToRender={10}
-        windowSize={5}
-        maxToRenderPerBatch={10}
         renderItem={({ item }) => (
           <TouchableOpacity 
             style={styles.resultItem} 

@@ -18,11 +18,16 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
     
     // 全体の未読数を取得する
     const fetchUnreadCount = async () => {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('chat_messages')
         .select('*', { count: 'exact', head: true })
         .eq('is_read', false)
         .neq('sender_id', session.user.id);
+
+      if (error) {
+        console.error('Failed to fetch unread count:', error);
+        return;
+      }
       
       setTotalUnreadCount(count || 0);
     };
@@ -35,7 +40,14 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
       .channel(channelName)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'chat_messages' },
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        () => {
+          fetchUnreadCount();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'chat_messages' },
         () => {
           fetchUnreadCount();
         }

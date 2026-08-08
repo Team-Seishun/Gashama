@@ -4,7 +4,6 @@ import TabBar from '@/components/tab-bar';
 import { appTabDefinitions } from '@/constants/app-tabs';
 
 export default function TabLayout() {
-
   return (
     <Tabs
       tabBar={(props: any) => <TabBar {...props} />}
