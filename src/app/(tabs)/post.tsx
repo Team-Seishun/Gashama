@@ -8,6 +8,7 @@ import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
+import SearchBar from '@/components/SearchBar';
 
 // ----------------------------------------------------
 // メインコンポーネント
@@ -26,6 +27,7 @@ export default function PostScreen() {
 
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loadingInventories, setLoadingInventories] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
@@ -89,17 +91,10 @@ export default function PostScreen() {
           <>
             {/* 検索バー */}
             <View style={styles.searchSection}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={20} color="#999" />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="検索キーワードを入力..."
-                  placeholderTextColor="#999"
-                />
-                <TouchableOpacity style={styles.searchButton}>
-                  <Text style={styles.searchButtonText}>検索</Text>
-                </TouchableOpacity>
-              </View>
+              <SearchBar
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
 
               {/* フィルタータグ */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsContainer}>
@@ -186,34 +181,6 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    height: 50,
-    marginBottom: 10,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
-    color: '#333',
-  },
-  searchButton: {
-    backgroundColor: '#C62828',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 15,
-  },
-  searchButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   tagsContainer: {
     flexDirection: 'row',

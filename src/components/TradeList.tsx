@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
+import SearchBar from '@/components/SearchBar';
 
 interface Trade {
   id: string;
@@ -265,17 +266,11 @@ export default function TradeList() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchBarContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="検索キーワードを入力..."
-          placeholderTextColor="#6B7280"
+      <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+        <SearchBar
           value={searchQuery}
           onChangeText={handleSearch}
         />
-        <TouchableOpacity style={styles.searchButton}>
-          <Text style={styles.searchButtonText}>検索</Text>
-        </TouchableOpacity>
       </View>
 
       <FlashList
@@ -307,38 +302,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  searchBarContainer: {
-    position: 'relative',
-    height: 48,
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
-  searchInput: {
-    height: 48,
-    backgroundColor: '#F3F3F6',
-    borderRadius: 9999,
-    paddingLeft: 16,
-    paddingRight: 70,
-    fontSize: 14,
-    color: '#1A1C1E',
-  },
-  searchButton: {
-    position: 'absolute',
-    right: 8,
-    width: 56,
-    height: 28,
-    backgroundColor: '#994700',
-    borderRadius: 9999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: 16,
     gap: 16,
   },
   centerContainer: {
