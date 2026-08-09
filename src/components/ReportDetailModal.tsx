@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
+import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ReportItem } from './InventoryCard';
 
 type Props = {
@@ -35,17 +35,19 @@ export default function ReportDetailModal({ report, onClose }: Props) {
             <Ionicons name="close" size={28} color="#fff" />
           </TouchableOpacity>
 
-          {report?.photo_url ? (
-            <Image
-              source={{ uri: report.photo_url }}
-              style={styles.modalImage}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={[styles.modalImage, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
-              <Ionicons name="image-outline" size={64} color="#666" />
-            </View>
-          )}
+          <View style={styles.imageWrapper}>
+            {report?.photo_url ? (
+              <Image
+                source={{ uri: report.photo_url }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={[{ width: '100%', height: '100%', backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="image-outline" size={64} color="#666" />
+              </View>
+            )}
+          </View>
 
           <View style={styles.modalInfoBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
   },
-  modalImage: {
+  imageWrapper: {
     flex: 1,
     width: '100%',
   },
