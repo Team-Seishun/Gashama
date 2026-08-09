@@ -85,6 +85,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
                 style={styles.avatarImage}
                 contentFit="cover"
                 cachePolicy="memory-disk"
+                recyclingKey={profile.icon_image || profile.id}
+                transition={200}
               />
             ) : (
               <Ionicons name="person" size={20} color="#999" />
@@ -109,6 +111,8 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
           style={styles.itemImagePlaceholderInv}
           contentFit="cover"
           cachePolicy="memory-disk"
+          recyclingKey={item.photo_url || item.id}
+          transition={200}
         />
         <View style={styles.inventoryInfo}>
           <Text style={styles.inventoryItemName}>{itemName}</Text>

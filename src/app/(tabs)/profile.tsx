@@ -356,6 +356,9 @@ export default function ProfileScreen() {
                       source={{ uri: item.photo_url || 'https://via.placeholder.com/200' }}
                       style={styles.itemImage}
                       contentFit="cover"
+                      cachePolicy="memory-disk"
+                      recyclingKey={item.photo_url || item.id}
+                      transition={200}
                     />
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemTitle} numberOfLines={1}>

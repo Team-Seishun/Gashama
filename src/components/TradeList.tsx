@@ -213,7 +213,7 @@ export default function TradeList() {
             </View>
             <View style={[styles.imageContainer, isRequesting && styles.dashedImageContainer]}>
               {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" />
+                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.photo_url || item.id} transition={200} />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="image-outline" size={30} color="#CCC" />
