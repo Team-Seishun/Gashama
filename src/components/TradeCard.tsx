@@ -8,6 +8,7 @@ export type TradeItem = {
   id: string;
   user: string;
   place: string;
+  gachaponName?: string;
   distTime: string;
   offer: string;
   request: string;
@@ -36,6 +37,14 @@ export const TradeCard: React.FC<TradeCardProps> = ({ item }) => {
             <View style={styles.placeBadge}>
               <Text style={styles.placeBadgeText}>{item.place}</Text>
             </View>
+            {item.gachaponName && (
+              <View style={styles.gachaponBadge}>
+                <Ionicons name="cube" size={10} color="#FF7A00" style={{ marginRight: 2 }} />
+                <Text style={styles.gachaponBadgeText} numberOfLines={1}>
+                  {item.gachaponName}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
         <TouchableOpacity>
@@ -48,17 +57,19 @@ export const TradeCard: React.FC<TradeCardProps> = ({ item }) => {
       <View style={styles.tradeContentRow}>
         {/* 出 (Offer) */}
         <View style={styles.tradeItemBox}>
-          <View style={styles.tradeItemBadgeOffer}>
-            <Text style={styles.tradeItemBadgeText}>出</Text>
-          </View>
-          <Text style={styles.tradeItemName} numberOfLines={1}>
-            {item.offer}
-          </Text>
           <Image
             source={{ uri: `https://picsum.photos/seed/${item.id}_offer/200/200` }}
             style={[styles.itemImagePlaceholder, { overflow: 'hidden' }]}
             contentFit="cover"
           />
+          <View style={styles.itemLabelRow}>
+            <View style={styles.tradeItemBadgeOffer}>
+              <Text style={styles.tradeItemBadgeText}>出</Text>
+            </View>
+            <Text style={styles.tradeItemName} numberOfLines={2}>
+              {item.offer}
+            </Text>
+          </View>
         </View>
 
         {/* 矢印・リフレッシュアイコン */}
@@ -68,17 +79,19 @@ export const TradeCard: React.FC<TradeCardProps> = ({ item }) => {
 
         {/* 求 (Request) */}
         <View style={styles.tradeItemBox}>
-          <View style={styles.tradeItemBadgeRequest}>
-            <Text style={styles.tradeItemBadgeTextRequest}>求</Text>
-          </View>
-          <Text style={styles.tradeItemName} numberOfLines={1}>
-            {item.request}
-          </Text>
           <Image
             source={{ uri: `https://picsum.photos/seed/${item.id}_req/200/200` }}
             style={[styles.itemImagePlaceholder, { overflow: 'hidden' }]}
             contentFit="cover"
           />
+          <View style={styles.itemLabelRow}>
+            <View style={styles.tradeItemBadgeRequest}>
+              <Text style={styles.tradeItemBadgeTextRequest}>求</Text>
+            </View>
+            <Text style={styles.tradeItemName} numberOfLines={2}>
+              {item.request}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -87,12 +100,7 @@ export const TradeCard: React.FC<TradeCardProps> = ({ item }) => {
         <>
           <TouchableOpacity
             style={styles.actionButtonActive}
-            onPress={() =>
-              router.push({
-                pathname: '/chat-room' as any,
-                params: { type: 'sent' },
-              })
-            }
+            onPress={() => router.push('/(tabs)/chat' as any)}
           >
             <Text style={styles.actionButtonTextActive}>交換申請を送る</Text>
           </TouchableOpacity>
@@ -155,10 +163,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    maxWidth: 100,
+    flexShrink: 1,
   },
   placeBadgeText: {
     fontSize: 11,
     color: '#666',
+  },
+  gachaponBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 6,
+    maxWidth: 110,
+    flexShrink: 1,
+  },
+  gachaponBadgeText: {
+    fontSize: 11,
+    color: '#D95C14',
+    fontWeight: '600',
+    flexShrink: 1,
   },
   distTimeText: {
     fontSize: 12,
@@ -174,40 +201,45 @@ const styles = StyleSheet.create({
   },
   tradeItemBox: {
     flex: 1,
+    gap: 8,
+  },
+  itemLabelRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    minHeight: 32,
+    marginTop: 6,
   },
   tradeItemBadgeOffer: {
     backgroundColor: '#FF7A00',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: 'flex-start',
-    marginBottom: 4,
   },
   tradeItemBadgeRequest: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: 'flex-start',
-    marginBottom: 4,
   },
   tradeItemBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   tradeItemBadgeTextRequest: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 'bold',
   },
   tradeItemName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
-    alignSelf: 'flex-start',
+    flex: 1,
+    lineHeight: 16,
   },
   itemImagePlaceholder: {
     width: '100%',

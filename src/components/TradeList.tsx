@@ -36,6 +36,7 @@ interface Trade {
   is_requesting?: boolean;
   profiles?: Profile | Profile[];
   stores?: Store | Store[];
+  gachapons?: { name: string } | { name: string }[];
 }
 
 export default function TradeList() {
@@ -56,12 +57,11 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
+        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name), gachapons(name)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
         console.error('Error fetching trades:', tradeError);
-        setErrorMsg('データの取得に失敗しました');
       } else if (tradeData) {
         setTrades(tradeData as Trade[]);
       }
@@ -125,15 +125,57 @@ export default function TradeList() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('エラー', 'ログインが必要です');
+        return;
+      }
 
-      if (user) {
-        await supabase
-          .from('trade_requests')
+      // 1. trade_requests に登録
+      await supabase
+        .from('trade_requests')
+        .insert({
+          trade_id: item.id,
+          sender_id: user.id,
+          status: '申請中',
+        });
+
+      // 2. 既存の chat_room を探す
+      const { data: existingRoom } = await supabase
+        .from('chat_rooms')
+        .select('id')
+        .eq('trade_id', item.id)
+        .or(`user_1_id.eq.${user.id},user_2_id.eq.${user.id}`)
+        .maybeSingle();
+
+      let targetRoomId = existingRoom?.id;
+
+      // 3. なければ新規作成
+      if (!targetRoomId) {
+        const partnerId = item.user_id && item.user_id !== user.id ? item.user_id : user.id;
+
+        const { data: newRoom, error: createError } = await supabase
+          .from('chat_rooms')
           .insert({
             trade_id: item.id,
+            user_1_id: user.id,
+            user_2_id: partnerId,
+            status: 'pending',
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('Error creating chat room:', createError);
+        } else if (newRoom) {
+          targetRoomId = newRoom.id;
+
+          // 最初のシステムメッセージを送る
+          await supabase.from('chat_messages').insert({
+            room_id: newRoom.id,
             sender_id: user.id,
-            status: '申請中',
+            message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。',
           });
+        }
       }
 
       setRequestedTradeIds((prev) => new Set(prev).add(item.id));
@@ -141,10 +183,11 @@ export default function TradeList() {
         prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
       );
 
-      router.push({
-        pathname: '/chat',
-        params: { tradeId: item.id, userName: item.user_name || '匿名ユーザー' },
-      });
+      if (targetRoomId) {
+        router.push(`/chat-room?roomId=${targetRoomId}`);
+      } else {
+        router.push('/(tabs)/chat' as any);
+      }
     } catch (err) {
       console.error('Failed to send trade request:', err);
       Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
@@ -158,9 +201,11 @@ export default function TradeList() {
     const userColor = colors[colorIndex];
     const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
     const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
+    const gachapon = Array.isArray(item.gachapons) ? item.gachapons[0] : item.gachapons;
 
     return (
       <View style={styles.card}>
+        {/* 1段目: ユーザーヘッダー */}
         <View style={styles.cardHeader}>
           <View style={styles.profileSection}>
             <View style={[styles.avatarPlaceholder, { backgroundColor: userColor }]}>
@@ -172,21 +217,14 @@ export default function TradeList() {
                   cachePolicy="memory-disk"
                 />
               ) : (
-                <Ionicons name="person" size={20} color="#999" />
+                <Ionicons name="person" size={18} color="#64748B" />
               )}
             </View>
             <View style={styles.userInfo}>
               <View style={styles.userNameRow}>
-                <Text style={styles.userName}>{item.user_name || '匿名ユーザー'}</Text>
-                {store?.name && (
-                  <View style={styles.placeBadge}>
-                    <Text style={styles.placeBadgeText} numberOfLines={1}>
-                      {store.name}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusBadgeText}>
+                <Text style={styles.userName} numberOfLines={1}>{item.user_name || '匿名ユーザー'}</Text>
+                <View style={[styles.statusBadge, isRequesting && styles.statusBadgeRequesting]}>
+                  <Text style={[styles.statusBadgeText, isRequesting && styles.statusBadgeTextRequesting]}>
                     {isRequesting ? 'リクエスト中' : '募集'}
                   </Text>
                 </View>
@@ -197,52 +235,76 @@ export default function TradeList() {
             </View>
           </View>
           <TouchableOpacity style={styles.moreButton}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#D95C14" />
+            <Ionicons name="ellipsis-horizontal" size={18} color="#94A3B8" />
           </TouchableOpacity>
         </View>
 
+        {/* 2段目: 店舗 & ガチャポン タグエリア (2行分離) */}
+        {(store?.name || gachapon?.name) && (
+          <View style={styles.tagColumn}>
+            {store?.name && (
+              <View style={styles.placeBadge}>
+                <Ionicons name="location" size={11} color="#EA580C" style={{ marginRight: 3 }} />
+                <Text style={styles.placeBadgeText} numberOfLines={1}>
+                  {store.name}
+                </Text>
+              </View>
+            )}
+            {gachapon?.name && (
+              <View style={styles.gachaponBadge}>
+                <Ionicons name="cube" size={11} color="#2563EB" style={{ marginRight: 3 }} />
+                <Text style={styles.gachaponBadgeText} numberOfLines={1}>
+                  {gachapon.name}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* 出・求 コンテンツ */}
         <View style={styles.tradeItemsContainer}>
           <View style={styles.itemSection}>
-            <View style={styles.itemLabelRow}>
-              <View style={styles.giveTag}>
-                <Text style={styles.giveTagText}>譲</Text>
-              </View>
-              <Text style={styles.itemNameText} numberOfLines={1}>
-                {item.item_give || 'なし'}
-              </Text>
-            </View>
             <View style={[styles.imageContainer, isRequesting && styles.dashedImageContainer]}>
               {item.photo_url ? (
                 <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <View style={styles.imagePlaceholder}>
-                  <Ionicons name="image-outline" size={30} color="#CCC" />
+                  <Ionicons name="image-outline" size={28} color="#CBD5E1" />
                 </View>
               )}
+            </View>
+            <View style={styles.itemLabelRow}>
+              <View style={styles.giveTag}>
+                <Text style={styles.giveTagText}>譲</Text>
+              </View>
+              <Text style={styles.itemNameText} numberOfLines={2}>
+                {item.item_give || 'なし'}
+              </Text>
             </View>
           </View>
 
           <View style={styles.connectorArrow}>
-            <Ionicons name="swap-horizontal" size={16} color="#994700" />
+            <Ionicons name="swap-horizontal" size={18} color="#EA580C" />
           </View>
 
           <View style={styles.itemSection}>
-            <View style={styles.itemLabelRowRight}>
-              <Text style={styles.itemNameTextRight} numberOfLines={1}>
-                {item.item_want || 'なし'}
-              </Text>
+            <View style={styles.imageContainer}>
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={28} color="#CBD5E1" />
+              </View>
+            </View>
+            <View style={styles.itemLabelRow}>
               <View style={styles.wantTag}>
                 <Text style={styles.wantTagText}>求</Text>
               </View>
-            </View>
-            <View style={styles.imageContainer}>
-              <View style={styles.imagePlaceholder}>
-                <Ionicons name="image-outline" size={30} color="#CCC" />
-              </View>
+              <Text style={styles.itemNameText} numberOfLines={2}>
+                {item.item_want || 'なし'}
+              </Text>
             </View>
           </View>
         </View>
 
+        {/* アクションボタン */}
         <View style={styles.actionArea}>
           {isRequesting ? (
             <TouchableOpacity style={styles.applyingButton} disabled>
@@ -251,6 +313,7 @@ export default function TradeList() {
           ) : (
             <TouchableOpacity
               style={styles.tradeButton}
+              activeOpacity={0.85}
               onPress={() => handleTradeAction(item)}
             >
               <Text style={styles.tradeButtonText}>トレードを提案する</Text>
@@ -316,26 +379,27 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
+    paddingBottom: 40,
     gap: 16,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 40,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(224, 192, 175, 0.3)',
-    borderRadius: 12,
+    borderColor: '#F1F5F9',
+    borderRadius: 20,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 2,
-    gap: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
+    gap: 12,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -345,15 +409,18 @@ const styles = StyleSheet.create({
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   avatarImage: {
     width: '100%',
@@ -361,6 +428,7 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     justifyContent: 'center',
+    flex: 1,
   },
   userNameRow: {
     flexDirection: 'row',
@@ -368,50 +436,88 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   userName: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#1A1C1E',
+    color: '#0F172A',
+    flexShrink: 1,
+  },
+  tagColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginTop: -2,
   },
   placeBadge: {
-    backgroundColor: '#FFF4E5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    maxWidth: 120,
+    paddingVertical: 3,
+    borderRadius: 20,
+    maxWidth: '100%',
   },
   placeBadgeText: {
     fontSize: 10,
-    color: '#D95C14',
+    color: '#C2410C',
     fontWeight: '600',
+    flexShrink: 1,
+  },
+  gachaponBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    maxWidth: '100%',
+  },
+  gachaponBadgeText: {
+    fontSize: 10,
+    color: '#1D4ED8',
+    fontWeight: '600',
+    flexShrink: 1,
   },
   statusBadge: {
-    backgroundColor: '#EEEEF0',
-    paddingHorizontal: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 12,
   },
   statusBadgeText: {
     fontSize: 10,
-    color: '#584235',
+    color: '#047857',
+    fontWeight: '700',
+  },
+  statusBadgeRequesting: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  statusBadgeTextRequesting: {
+    color: '#DC2626',
   },
   timeText: {
     fontSize: 11,
-    color: '#584235',
+    color: '#64748B',
     marginTop: 2,
   },
   moreButton: {
-    padding: 4,
-  },
-  moreButtonText: {
-    fontSize: 16,
-    color: '#994700',
-    fontWeight: '700',
+    padding: 6,
+    borderRadius: 20,
   },
   tradeItemsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     position: 'relative',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 12,
   },
   itemSection: {
     flex: 1,
@@ -421,59 +527,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  itemLabelRowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 6,
+    minHeight: 32,
   },
   giveTag: {
-    backgroundColor: '#FF7A00',
-    paddingHorizontal: 6,
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   giveTagText: {
-    color: '#5C2800',
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   wantTag: {
-    backgroundColor: '#00A2FD',
-    paddingHorizontal: 6,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
   wantTagText: {
-    color: '#003558',
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   itemNameText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#1A1C1E',
+    color: '#0F172A',
     flex: 1,
-  },
-  itemNameTextRight: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1A1C1E',
-    textAlign: 'right',
-    flex: 1,
+    lineHeight: 16,
   },
   imageContainer: {
-    height: 130,
-    borderRadius: 8,
+    height: 124,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#EEEEF0',
+    backgroundColor: '#E2E8F0',
   },
   dashedImageContainer: {
-    borderWidth: 1,
-    borderColor: '#E0C0AF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     borderStyle: 'dashed',
-    backgroundColor: '#F3F3F6',
+    backgroundColor: '#F1F5F9',
   },
   itemImage: {
     width: '100%',
@@ -482,71 +581,77 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#EEEEF0',
+    backgroundColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   connectorArrow: {
     position: 'absolute',
     left: '50%',
-    top: '50%',
-    marginLeft: -16,
-    marginTop: -4,
-    width: 32,
-    height: 32,
-    borderRadius: 9999,
+    top: 74,
+    marginLeft: -17,
+    marginTop: -17,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0C0AF',
+    borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  arrowText: {
-    color: '#994700',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   actionArea: {
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
+    marginTop: 2,
   },
   tradeButton: {
     width: '100%',
-    height: 36,
-    backgroundColor: '#994700',
-    borderRadius: 9999,
+    height: 42,
+    backgroundColor: '#EA580C',
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   tradeButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   applyingButton: {
     width: '100%',
-    height: 36,
-    backgroundColor: '#E2E2E5',
+    height: 42,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(153, 71, 0, 0.2)',
-    borderRadius: 9999,
+    borderColor: '#E2E8F0',
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
   },
   applyingButtonText: {
-    color: '#994700',
-    fontSize: 12,
+    color: '#64748B',
+    fontSize: 13,
     fontWeight: '700',
   },
   noticeText: {
     fontSize: 10,
-    color: '#584235',
+    color: '#94A3B8',
     textAlign: 'center',
   },
   emptyText: {
-    color: '#888888',
+    color: '#94A3B8',
     fontSize: 14,
   },
 });
