@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
@@ -264,29 +265,34 @@ export default function ReportCreateScreen() {
 
   if (fetching) {
     return (
-      <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#FF6F00" />
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#FF6F00" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (loadError) {
     return (
-      <View style={[styles.safeArea, styles.errorContainer]}>
-        <Text style={styles.errorTitle}>データの読み込みに失敗しました</Text>
-        <Text style={styles.errorText}>{loadError}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchMasterData}>
-          <Text style={styles.retryButtonText}>再読み込み</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>データの読み込みに失敗しました</Text>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchMasterData}>
+            <Text style={styles.retryButtonText}>再読み込み</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.safeArea}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       {/* ヘッダー */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -454,14 +460,14 @@ export default function ReportCreateScreen() {
         )}
       </Modal>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
-    paddingTop: Platform.OS === 'android' ? 30 : 50,
   },
   header: {
     flexDirection: 'row',
