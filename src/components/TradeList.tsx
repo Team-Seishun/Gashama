@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -190,7 +190,7 @@ export default function TradeList() {
             </View>
             <View style={[styles.imageContainer, isRequesting && styles.dashedImageContainer]}>
               {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.itemImage} />
+                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="image-outline" size={30} color="#CCC" />
@@ -473,7 +473,6 @@ const styles = StyleSheet.create({
   itemImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   imagePlaceholder: {
     width: '100%',
