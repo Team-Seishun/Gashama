@@ -4,19 +4,53 @@ export type SaveProfileInput = {
   userId: string;
   nickname: string;
   iconImage: string;
+  selfIntrodution?: string;
+};
+
+export type ProfileRecord = {
+  id: string;
+  nickname?: string | null;
+  icon_image?: string | null;
+  self_introdution?: string | null;
+  evaluate_star?: number | null;
+  trade_history?: number | null;
+  contribution_level?: number | null;
 };
 
 export const profileApi = {
   getProfileByUserId: async (userId: string) => {
-    return await supabase.from('profiles').select('id, nickname, icon_image').eq('id', userId).maybeSingle();
+    const res = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    console.log('[Profile API] getProfileByUserId result:', res.data, res.error);
+    return res;
   },
-  saveProfile: async ({ userId, nickname, iconImage }: SaveProfileInput) => {
-    return await supabase.from('profiles').upsert({
+  saveProfile: async ({ userId, nickname, iconImage, selfIntrodution }: SaveProfileInput) => {
+    const trimmedNickname = nickname.trim();
+    const payload: Record<string, any> = {
       id: userId,
-      nickname: nickname.trim(),
+      nickname: trimmedNickname,
       icon_image: iconImage,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    if (selfIntrodution !== undefined) {
+      payload.self_introdution = selfIntrodution ? selfIntrodution.trim() : null;
+    }
+
+    let result = await supabase.from('profiles').upsert(payload);
+
+    // self_introdution カラムが存在しない DB スキーマエラーのフォールバック
+    if (result.error && result.error.message.includes('self_introdution')) {
+      delete payload.self_introdution;
+      result = await supabase.from('profiles').upsert(payload);
+    }
+
+    console.log('[Profile API] saveProfile result:', result.data, result.error);
+    return result;
   },
   uploadProfileIcon: async (userId: string, imageUri: string) => {
     try {
