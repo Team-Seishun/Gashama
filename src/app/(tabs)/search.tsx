@@ -1,17 +1,32 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import SearchMasterView, { SearchResult } from '@/components/search-master-view';
 
 export default function SearchScreen() {
   const router = useRouter();
+  const { returnTo, activeTab } = useLocalSearchParams<{ returnTo?: string; activeTab?: string }>();
 
   const handleSelectResult = (item: SearchResult) => {
-    // 選択されたタイプによってパラメータを変えてマップ画面に戻る
-    if (item.type === 'store') {
-      router.navigate({ pathname: '/', params: { storeId: item.id } });
-    } else if (item.type === 'gachapon') {
-      router.navigate({ pathname: '/', params: { gachaponId: item.id } });
+    if (returnTo === 'post') {
+      router.navigate({
+        pathname: '/(tabs)/post',
+        params: {
+          filterType: item.type,
+          filterId: item.id,
+          filterName: item.name,
+          tab: activeTab || 'inventory',
+        }
+      });
+    } else {
+      // 選択されたタイプによってパラメータを変えてマップ画面に戻る
+      if (item.type === 'store') {
+        router.navigate({ pathname: '/', params: { storeId: item.id } });
+      } else if (item.type === 'gachapon') {
+        router.navigate({ pathname: '/', params: { gachaponId: item.id } });
+      } else {
+        router.navigate({ pathname: '/', params: { itemId: item.id } });
+      }
     }
   };
 

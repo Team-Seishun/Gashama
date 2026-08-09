@@ -1,8 +1,8 @@
+import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getProfileIconSource } from '@/features/profile/profile-icons';
 
 export type ReportItem = {
   id: string;

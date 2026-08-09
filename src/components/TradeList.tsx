@@ -1,20 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import SearchBar from '@/components/SearchBar';
+import { getProfileIconSource } from '@/features/profile/profile-icons';
+import { supabase } from '@/utils/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import { Image } from 'expo-image';
-import { FlashList } from '@shopify/flash-list';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/utils/supabase';
-import { getProfileIconSource } from '@/features/profile/profile-icons';
-import SearchBar from '@/components/SearchBar';
 
 interface Trade {
   id: string;
@@ -101,7 +100,7 @@ export default function TradeList() {
 
   useEffect(() => {
     let filtered = trades;
-    
+
     if (filterType === 'store' && filterId) {
       filtered = trades.filter(trade => trade.store_id === filterId);
     } else if (filterType === 'gachapon' && filterId) {

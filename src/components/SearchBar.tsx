@@ -1,30 +1,29 @@
 import React from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  onSearch?: () => void;
+  value: string; // Used to display the selected filter name
+  onPress: () => void;
+  onClear?: () => void;
   placeholder?: string;
 }
 
-export default function SearchBar({ value, onChangeText, onSearch, placeholder = "検索キーワードを入力..." }: SearchBarProps) {
+export default function SearchBar({ value, onPress, onClear, placeholder = "検索キーワードを入力..." }: SearchBarProps) {
   return (
-    <View style={styles.searchBar}>
+    <TouchableOpacity style={styles.searchBar} activeOpacity={0.8} onPress={onPress}>
       <Ionicons name="search" size={20} color="#999" />
-      <TextInput
-        style={styles.searchInput}
-        placeholder={placeholder}
-        placeholderTextColor="#999"
-        value={value}
-        onChangeText={onChangeText}
-        onSubmitEditing={onSearch}
-      />
-      <TouchableOpacity style={styles.searchButton} onPress={onSearch}>
-        <Text style={styles.searchButtonText}>検索</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.inputContainer}>
+        <Text style={[styles.text, !value && styles.placeholderText]} numberOfLines={1}>
+          {value || placeholder}
+        </Text>
+      </View>
+      {value && onClear ? (
+        <TouchableOpacity style={styles.clearButton} onPress={onClear}>
+          <Ionicons name="close-circle" size={20} color="#999" />
+        </TouchableOpacity>
+      ) : null}
+    </TouchableOpacity>
   );
 }
 
@@ -39,21 +38,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     height: 50,
   },
-  searchInput: {
+  inputContainer: {
     flex: 1,
     marginLeft: 10,
+    marginRight: 10,
+    justifyContent: 'center',
+  },
+  text: {
     fontSize: 14,
     color: '#333',
   },
-  searchButton: {
-    backgroundColor: '#D95C14',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 15,
+  placeholderText: {
+    color: '#999',
   },
-  searchButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+  clearButton: {
+    padding: 4,
   },
 });
