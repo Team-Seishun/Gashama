@@ -4,15 +4,36 @@ import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+export type Profile = {
+  id?: string;
+  nickname?: string;
+  icon_image?: string;
+};
+
+export type Store = {
+  id?: string;
+  name?: string;
+};
+
+export type Gachapon = {
+  id?: string;
+  name?: string;
+};
+
+export type GachaponItem = {
+  id?: string;
+  name?: string;
+};
+
 export type ReportItem = {
   id: string;
   created_at: string;
   photo_url: string;
   stock_status: number; // 0: 売り切れ, 1: 残りわずか, 2: 在庫あり
-  stores: any;
-  gachapons: any;
-  gachapon_items: any;
-  profiles: any;
+  stores?: Store | Store[];
+  gachapons?: Gachapon | Gachapon[];
+  gachapon_items?: GachaponItem | GachaponItem[];
+  profiles?: Profile | Profile[];
 };
 
 type InventoryCardProps = {
@@ -57,12 +78,13 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.userInfo}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: '#F0F0F0', overflow: 'hidden' }]}>
+          <View style={styles.avatarPlaceholder}>
             {profile?.icon_image ? (
               <Image
                 source={getProfileIconSource(profile.icon_image)}
-                style={{ width: '100%', height: '100%' }}
+                style={styles.avatarImage}
                 contentFit="cover"
+                cachePolicy="memory-disk"
               />
             ) : (
               <Ionicons name="person" size={20} color="#999" />
@@ -84,8 +106,9 @@ export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
       <View style={styles.inventoryContent}>
         <Image
           source={{ uri: item.photo_url || 'https://via.placeholder.com/200' }}
-          style={[styles.itemImagePlaceholderInv, { overflow: 'hidden' }]}
+          style={styles.itemImagePlaceholderInv}
           contentFit="cover"
+          cachePolicy="memory-disk"
         />
         <View style={styles.inventoryInfo}>
           <Text style={styles.inventoryItemName}>{itemName}</Text>
@@ -128,6 +151,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    backgroundColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   userNameContainer: {
     flexDirection: 'row',
@@ -170,6 +199,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E0E0E0',
     borderRadius: 8,
     marginRight: 16,
+    overflow: 'hidden',
   },
   inventoryInfo: {
     flex: 1,

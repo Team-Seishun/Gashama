@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,6 +78,15 @@ export default function PostScreen() {
     fetchInventories();
   }, [filterType, filterId]);
 
+  const renderInventoryItem = useCallback(({ item }: { item: ReportItem }) => (
+    <TouchableOpacity 
+      activeOpacity={0.8}
+      onPress={() => setSelectedReport(item)}
+    >
+      <InventoryCard item={item} />
+    </TouchableOpacity>
+  ), []);
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -117,14 +126,7 @@ export default function PostScreen() {
               <FlashList
                 data={inventories}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedReport(item)}
-                  >
-                    <InventoryCard item={item} />
-                  </TouchableOpacity>
-                )}
+                renderItem={renderInventoryItem}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshing={loadingInventories}

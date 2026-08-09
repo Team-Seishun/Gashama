@@ -1,18 +1,20 @@
 import SearchBar from '@/components/SearchBar';
+import { Profile, Store, formatTimeAgo } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Alert
 } from 'react-native';
 
 interface Trade {
@@ -32,8 +34,8 @@ interface Trade {
   item_give?: string | null;
   item_want?: string | null;
   is_requesting?: boolean;
-  profiles?: any;
-  stores?: any;
+  profiles?: Profile | Profile[];
+  stores?: Store | Store[];
 }
 
 export default function TradeList() {
@@ -45,7 +47,6 @@ export default function TradeList() {
   }>();
 
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -94,11 +95,11 @@ export default function TradeList() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      channel.unsubscribe();
     };
   }, []);
 
-  useEffect(() => {
+  const filteredTrades = useMemo(() => {
     let filtered = trades;
 
     if (filterType === 'store' && filterId) {
@@ -107,20 +108,23 @@ export default function TradeList() {
       filtered = trades.filter(trade => trade.gachapon_id === filterId);
     }
 
-    setFilteredTrades(filtered);
-    if (filtered.length === 0 && trades.length > 0) {
+    return filtered;
+  }, [filterType, filterId, trades]);
+
+  useEffect(() => {
+    if (filteredTrades.length === 0 && trades.length > 0) {
       setErrorMsg('条件に一致するトレードがありません');
     } else {
       setErrorMsg(null);
     }
-  }, [filterType, filterId, trades]);
+  }, [filteredTrades, trades.length]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchTrades();
   };
 
-  const handleTradeAction = async (item: Trade) => {
+  const handleTradeAction = useCallback(async (item: Trade) => {
     if (requestedTradeIds.has(item.id)) return;
 
     try {
@@ -140,9 +144,6 @@ export default function TradeList() {
       setTrades((prev) =>
         prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
       );
-      setFilteredTrades((prev) =>
-        prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
-      );
 
       router.push({
         pathname: '/chat',
@@ -150,14 +151,11 @@ export default function TradeList() {
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
-      router.push({
-        pathname: '/chat',
-        params: { tradeId: item.id, userName: item.user_name || '匿名ユーザー' },
-      });
+      Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
     }
-  };
+  }, [requestedTradeIds, router]);
 
-  const renderItem = ({ item }: { item: Trade }) => {
+  const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
     const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
     const colorIndex = (item.user_name || '').length % colors.length;
@@ -169,12 +167,13 @@ export default function TradeList() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.profileSection}>
-            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor, overflow: 'hidden' }]}>
+            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor }]}>
               {profile?.icon_image ? (
                 <Image
                   source={getProfileIconSource(profile.icon_image)}
-                  style={{ width: '100%', height: '100%' }}
+                  style={styles.avatarImage}
                   contentFit="cover"
+                  cachePolicy="memory-disk"
                 />
               ) : (
                 <Ionicons name="person" size={20} color="#999" />
@@ -196,7 +195,9 @@ export default function TradeList() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.timeText}>200m • 5分前</Text>
+              <Text style={styles.timeText}>
+                200m • {item.created_at ? formatTimeAgo(item.created_at) : '不明'}
+              </Text>
             </View>
           </View>
           <TouchableOpacity style={styles.moreButton}>
@@ -216,7 +217,7 @@ export default function TradeList() {
             </View>
             <View style={[styles.imageContainer, isRequesting && styles.dashedImageContainer]}>
               {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" />
+                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="image-outline" size={30} color="#CCC" />
@@ -268,7 +269,7 @@ export default function TradeList() {
         </View>
       </View>
     );
-  };
+  }, [requestedTradeIds, handleTradeAction]);
 
   if (loading) {
     return (
@@ -351,11 +352,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   userInfo: {
     justifyContent: 'center',

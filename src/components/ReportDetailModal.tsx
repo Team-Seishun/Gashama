@@ -9,6 +9,8 @@ type Props = {
 };
 
 export default function ReportDetailModal({ report, onClose }: Props) {
+  const profile = Array.isArray(report?.profiles) ? report?.profiles[0] : report?.profiles;
+  const gachapon = Array.isArray(report?.gachapons) ? report?.gachapons[0] : report?.gachapons;
   const now = Date.now();
 
   return (
@@ -45,22 +47,22 @@ export default function ReportDetailModal({ report, onClose }: Props) {
 
           <View style={styles.modalInfoBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              {report?.profiles?.icon_image && report.profiles.icon_image.startsWith('http') ? (
-                <Image source={{ uri: report.profiles.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+              {profile?.icon_image && profile.icon_image.startsWith('http') ? (
+                <Image source={{ uri: profile.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
               ) : (
                 <Ionicons name="person-circle" size={40} color="#ccc" style={{ marginLeft: -2 }} />
               )}
               <View style={{ marginLeft: 8 }}>
                 <Text style={{ color: '#fff', fontSize: 15, fontWeight: 'bold' }}>
-                  {report?.profiles?.nickname || '名無しさん'}
+                  {profile?.nickname || '名無しさん'}
                 </Text>
                 <Text style={{ color: '#aaa', fontSize: 12 }}>
-                  @{report?.profiles?.id ? report.profiles.id.substring(0, 8) : 'unknown'}
+                  @{profile?.id ? profile.id.substring(0, 8) : 'unknown'}
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.modalItemName}>{report?.gachapons?.name || '不明な商品'}</Text>
+            <Text style={styles.modalItemName}>{gachapon?.name || '不明な商品'}</Text>
 
             <View style={styles.modalStatusRow}>
               <View style={[styles.statusBadge, {
