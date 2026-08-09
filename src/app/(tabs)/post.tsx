@@ -127,6 +127,7 @@ export default function PostScreen() {
                 data={inventories}
                 keyExtractor={(item) => item.id}
                 renderItem={renderInventoryItem}
+                estimatedItemSize={160}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshing={loadingInventories}

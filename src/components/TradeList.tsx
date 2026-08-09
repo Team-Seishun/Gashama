@@ -293,6 +293,7 @@ export default function TradeList() {
         data={filterType ? filteredTrades : trades}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        estimatedItemSize={250}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
