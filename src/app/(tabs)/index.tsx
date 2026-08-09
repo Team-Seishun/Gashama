@@ -54,7 +54,7 @@ export default function MapScreen() {
           accuracy: Location.Accuracy.Balanced,
         });
         setLocation(currentLocation);
-        
+
         if (mapRef.current) {
           mapRef.current.animateToRegion({
             latitude: currentLocation.coords.latitude,
@@ -79,13 +79,7 @@ export default function MapScreen() {
     if (storeId && gashaponLocations.length > 0) {
       const store = gashaponLocations.find((loc) => loc.id === storeId);
       if (store) {
-        handleMarkerPress(store);
-        mapRef.current?.animateToRegion({
-          latitude: store.latitude,
-          longitude: store.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
+        handleMarkerPress(store, 500);
       }
     }
   }, [storeId, gashaponLocations]);
@@ -127,7 +121,7 @@ export default function MapScreen() {
               latitude: loc.latitude,
               longitude: loc.longitude,
             }));
-            
+
             setTimeout(() => {
               mapRef.current?.fitToCoordinates(coordinates, {
                 edgePadding: { top: 150, right: 50, bottom: 100, left: 50 },
@@ -137,7 +131,7 @@ export default function MapScreen() {
           }
         }
       };
-      
+
       fetchInStockStores();
     } else if (!gachaponId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -175,11 +169,19 @@ export default function MapScreen() {
           let lat = 0;
           let lng = 0;
           if (store.location) {
-            // ユーザーのDB入力形式に合わせる: "(lat,lng)"
+            // DBの入力形式が "(lat,lng)" または "(lng,lat)" と混在しているため、値の大きさで判定する
+            // 日本の座標（Lat: 35前後, Lng: 136前後）を前提とし、大きい方をLngとする
             const match = store.location.match(/\(([^,]+),([^)]+)\)/);
             if (match) {
-              lat = parseFloat(match[1]);
-              lng = parseFloat(match[2]);
+              const val1 = parseFloat(match[1]);
+              const val2 = parseFloat(match[2]);
+              if (val1 > val2) {
+                lng = val1;
+                lat = val2;
+              } else {
+                lat = val1;
+                lng = val2;
+              }
             }
           }
           return {
@@ -251,7 +253,7 @@ export default function MapScreen() {
           .eq('store_id', selectedLocation.id)
           .order('created_at', { ascending: false })
           .limit(11); // 10件以上あるか判定するために11件取得
-          
+
         if (data) {
           setStoreReports(data);
         } else if (error) {
@@ -266,9 +268,19 @@ export default function MapScreen() {
   }, [selectedLocation]);
 
   // マーカータップ時の処理
-  function handleMarkerPress(loc: LocationData) {
+  function handleMarkerPress(loc: LocationData, delay = 100) {
     setSelectedLocation(loc);
     bottomSheetRef.current?.expand(); // シートを引き出す
+
+    // ボトムシートが画面の下半分(約70%)を覆うため、ピンが上部に見えるようにマップの中心を少し南（マイナス方向）にずらす
+    setTimeout(() => {
+      mapRef.current?.animateToRegion({
+        latitude: loc.latitude - 0.004, // オフセット値を調整（さらに南へずらす）
+        longitude: loc.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 500);
+    }, delay);
   }
 
   return (
@@ -330,7 +342,7 @@ export default function MapScreen() {
       </MapView>
 
       {/* フローティング検索バー */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.searchContainer}
         activeOpacity={0.8}
         onPress={() => router.push('/search')}
@@ -389,7 +401,7 @@ export default function MapScreen() {
                     timeAgo = hours < 24 ? `${hours}時間前` : `${Math.floor(hours / 24)}日前`;
                   }
                 }
-                
+
                 let statusText = '不明';
                 if (latestReport.stock_status === 2) statusText = '在庫あり';
                 else if (latestReport.stock_status === 1) statusText = '残りわずか';
@@ -417,8 +429,8 @@ export default function MapScreen() {
                       {storeReports.slice(0, 3).map((report, index) => {
                         const isLastAndMore = index === 2 && storeReports.length > 3;
                         return (
-                          <TouchableOpacity 
-                            key={report.id} 
+                          <TouchableOpacity
+                            key={report.id}
                             style={styles.placeholderBoxSmall}
                             activeOpacity={0.8}
                             onPress={() => {
@@ -434,7 +446,7 @@ export default function MapScreen() {
                             ) : (
                               <Ionicons name="image-outline" size={24} color="#ccc" />
                             )}
-                            
+
                             {/* 3枚目かつ4枚以上ある場合のオーバーレイ */}
                             {isLastAndMore && (
                               <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }]}>
@@ -468,7 +480,7 @@ export default function MapScreen() {
               {/* 在庫カードリスト */}
               {storeReports.slice(0, 10).map((report) => {
                 const title = report.gachapons?.name || '不明な商品';
-                
+
                 // 経過時間の計算
                 const diff = now - new Date(report.created_at).getTime();
                 const minutes = Math.floor(diff / 60000);
@@ -477,7 +489,7 @@ export default function MapScreen() {
                   const hours = Math.floor(minutes / 60);
                   timeAgo = hours < 24 ? `${hours}時間前` : `${Math.floor(hours / 24)}日前`;
                 }
-                
+
                 // ステータスのフォーマット
                 let statusInfo = { text: '不明', color: '#8E8E93', bgColor: '#F2F2F7' };
                 if (report.stock_status === 2) statusInfo = { text: '在庫あり', color: '#FF7A00', bgColor: '#FFF2E5' };
@@ -485,8 +497,8 @@ export default function MapScreen() {
                 else if (report.stock_status === 0) statusInfo = { text: '売り切れ', color: '#8E8E93', bgColor: '#F2F2F7' };
 
                 return (
-                  <TouchableOpacity 
-                    key={report.id} 
+                  <TouchableOpacity
+                    key={report.id}
                     style={styles.inventoryCard}
                     activeOpacity={0.7}
                     onPress={() => setSelectedImageReport(report)}
@@ -503,7 +515,7 @@ export default function MapScreen() {
                     {/* 詳細情報 */}
                     <View style={styles.inventoryDetails}>
                       <Text style={styles.inventoryItemTitle}>{title}</Text>
-                      
+
                       {/* ユーザー情報 */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 4 }}>
                         {report.profiles?.icon_image && report.profiles.icon_image.startsWith('http') ? (
@@ -546,26 +558,26 @@ export default function MapScreen() {
       >
         <View style={styles.modalOverlay}>
           {/* 背景タップで閉じる */}
-          <TouchableOpacity 
-            style={styles.modalCloseArea} 
-            activeOpacity={1} 
+          <TouchableOpacity
+            style={styles.modalCloseArea}
+            activeOpacity={1}
             onPress={() => setSelectedImageReport(null)}
           />
           <View style={styles.modalContent}>
             {/* 閉じるボタン */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.modalCloseButton}
               onPress={() => setSelectedImageReport(null)}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
-            
+
             {/* 画像 */}
             {selectedImageReport?.photo_url ? (
-              <Image 
-                source={{ uri: selectedImageReport.photo_url }} 
-                style={styles.modalImage} 
-                resizeMode="contain" 
+              <Image
+                source={{ uri: selectedImageReport.photo_url }}
+                style={styles.modalImage}
+                resizeMode="contain"
               />
             ) : (
               <View style={[styles.modalImage, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
@@ -592,21 +604,21 @@ export default function MapScreen() {
               </View>
 
               <Text style={styles.modalItemName}>{selectedImageReport?.gachapons?.name || '不明な商品'}</Text>
-              
+
               <View style={styles.modalStatusRow}>
-                <View style={[styles.statusBadge, { 
-                  backgroundColor: selectedImageReport?.stock_status === 2 ? '#FFF2E5' : 
-                                 selectedImageReport?.stock_status === 1 ? '#E5F1FF' : '#F2F2F7' 
+                <View style={[styles.statusBadge, {
+                  backgroundColor: selectedImageReport?.stock_status === 2 ? '#FFF2E5' :
+                    selectedImageReport?.stock_status === 1 ? '#E5F1FF' : '#F2F2F7'
                 }]}>
-                  <Text style={[styles.statusBadgeText, { 
-                    color: selectedImageReport?.stock_status === 2 ? '#FF7A00' : 
-                           selectedImageReport?.stock_status === 1 ? '#007AFF' : '#8E8E93' 
+                  <Text style={[styles.statusBadgeText, {
+                    color: selectedImageReport?.stock_status === 2 ? '#FF7A00' :
+                      selectedImageReport?.stock_status === 1 ? '#007AFF' : '#8E8E93'
                   }]}>
-                    {selectedImageReport?.stock_status === 2 ? '在庫あり' : 
-                     selectedImageReport?.stock_status === 1 ? '残りわずか' : '売り切れ'}
+                    {selectedImageReport?.stock_status === 2 ? '在庫あり' :
+                      selectedImageReport?.stock_status === 1 ? '残りわずか' : '売り切れ'}
                   </Text>
                 </View>
-                
+
                 <Text style={styles.modalTimeText}>
                   {selectedImageReport?.created_at ? (() => {
                     const diff = now - new Date(selectedImageReport.created_at).getTime();
@@ -874,7 +886,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  
+
   // カスタムコールアウト(ピンの吹き出し)
   customCalloutContainer: {
     alignItems: 'center',
@@ -920,7 +932,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '180deg' }],
     marginTop: -1, // 吹き出し本体との隙間を埋めるため
   },
-  
+
   // モーダル関連
   modalOverlay: {
     flex: 1,
@@ -929,11 +941,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCloseArea: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     width: '100%',
