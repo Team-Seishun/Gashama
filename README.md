@@ -1,4 +1,4 @@
-# 🎰 Gashapon Tracker & Trade (ガシャポン トラッカー & トレード)
+# 🎰 Gashama(ガシャマ)
 
 「欲しいガチャガチャがどこにあるか分からない」  
 「店舗に行ってみたら売り切れていた」  
@@ -116,8 +116,4 @@ src/
 
 ## 📄 ライセンス
 
-このプロジェクトは [MIT License](LICENSE) のもとでオープンソースとして公開されています。
-
-```text
-Copyright (c) 2026 NxTEND-THE-HACK (Team 40)
-```
+[MIT License](LICENSE)
