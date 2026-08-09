@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
-import { ScrollView } from 'react-native';
+import { ChatMessage, ChatRoom, Profile, TradeSummary } from '@/features/chat/types';
 import { supabase } from '@/utils/supabase';
-import { ChatMessage, ChatRoom, Profile } from '@/features/chat/types';
+import { useEffect, useState } from 'react';
+import { ScrollView } from 'react-native';
 
 export function useChatRoom(roomId: string | undefined, userId: string | undefined, scrollViewRef: React.RefObject<ScrollView | null>) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partner, setPartner] = useState<Profile | null>(null);
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [chatRoom, setChatRoom] = useState<ChatRoom | null>(null);
+  const [trade, setTrade] = useState<TradeSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -18,15 +19,19 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
     const fetchRoomAndMessages = async () => {
       setIsLoading(true);
       try {
-        // 並列通信で依存関係のないデータを一気に取得
-        const [
-          roomRes,
-          myProfileRes,
-          messagesRes,
-          // 未読メッセージの既読化処理（バックグラウンドで行うが、並列に組み込む）
-          updateRes
-        ] = await Promise.all([
-          supabase.from('chat_rooms').select('*').eq('id', roomId).single(),
+        const roomRes = await supabase.from('chat_rooms').select('*').eq('id', roomId).single();
+        if (roomRes.error || !roomRes.data) throw roomRes.error;
+
+        const tradeId = roomRes.data.trade_id;
+
+        const [tradeRes, myProfileRes, messagesRes, updateRes] = await Promise.all([
+          tradeId
+            ? supabase
+                .from('trades')
+                .select('id, item_give, item_want, photo_url, gachapons(name)')
+                .eq('id', tradeId)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
           supabase.from('profiles').select('id, nickname, icon_image').eq('id', userId).single(),
           supabase.from('chat_messages').select('*').eq('room_id', roomId).order('created_at', { ascending: true }),
           supabase
@@ -38,8 +43,9 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
             .select()
         ]);
 
-        if (roomRes.error || !roomRes.data) throw roomRes.error;
-
+        if (tradeRes?.error) {
+          console.error('Failed to fetch trade details:', tradeRes.error);
+        }
         if (myProfileRes.error) {
           console.error('Failed to fetch my profile:', myProfileRes.error);
         }
@@ -49,7 +55,8 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
 
         if (!isMounted) return;
 
-        setChatRoom(roomRes.data);
+        setChatRoom({ ...roomRes.data, trade: tradeRes?.data ? (tradeRes.data as TradeSummary) : null });
+        setTrade(tradeRes?.data ? (tradeRes.data as TradeSummary) : null);
         if (myProfileRes.data) setMyProfile(myProfileRes.data);
         if (messagesRes.data) setMessages(messagesRes.data);
 
@@ -129,6 +136,7 @@ export function useChatRoom(roomId: string | undefined, userId: string | undefin
     myProfile,
     chatRoom,
     setChatRoom,
+    trade,
     isLoading
   };
 }

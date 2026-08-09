@@ -4,6 +4,14 @@ export type Profile = {
   icon_image: string | null;
 };
 
+export type TradeSummary = {
+  id: string;
+  item_give: string | null;
+  item_want: string | null;
+  photo_url: string | null;
+  gachapons: { name: string } | { name: string }[] | null;
+};
+
 export type ChatRoom = {
   id: string;
   trade_id: string;
@@ -15,6 +23,7 @@ export type ChatRoom = {
   user_2_completed: boolean;
   created_at: string;
   updated_at: string;
+  trade?: TradeSummary | null;
 };
 
 export type ChatMessage = {
@@ -34,4 +43,9 @@ export type ChatRoomWithPartner = ChatRoom & {
   latestMessage: string | null;
   latestMessageTime: string | null;
   unreadCount?: number; // 新規追加
+  trade?: {
+    item_give: string | null;
+    item_want: string | null;
+    gachapons: { name: string } | { name: string }[] | null;
+  } | null;
 };
