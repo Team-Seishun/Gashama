@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
   },
   modalCloseButton: {
     position: 'absolute',
@@ -128,14 +129,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   modalImage: {
+    flex: 1,
     width: '100%',
-    height: '70%',
   },
   modalInfoBox: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
     padding: 20,
     paddingBottom: 40,
     backgroundColor: 'rgba(0,0,0,0.7)',
