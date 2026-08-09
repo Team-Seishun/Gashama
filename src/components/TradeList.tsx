@@ -34,6 +34,7 @@ interface Trade {
   item_want?: string | null;
   is_requesting?: boolean;
   profiles?: any;
+  stores?: any;
 }
 
 export default function TradeList() {
@@ -55,7 +56,7 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image)')
+        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -163,6 +164,7 @@ export default function TradeList() {
     const colorIndex = (item.user_name || '').length % colors.length;
     const userColor = colors[colorIndex];
     const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+    const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
 
     return (
       <View style={styles.card}>
@@ -182,6 +184,13 @@ export default function TradeList() {
             <View style={styles.userInfo}>
               <View style={styles.userNameRow}>
                 <Text style={styles.userName}>{item.user_name || '匿名ユーザー'}</Text>
+                {store?.name && (
+                  <View style={styles.placeBadge}>
+                    <Text style={styles.placeBadgeText} numberOfLines={1}>
+                      {store.name}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.statusBadge}>
                   <Text style={styles.statusBadgeText}>
                     {isRequesting ? 'リクエスト中' : '募集'}
@@ -361,6 +370,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#1A1C1E',
+  },
+  placeBadge: {
+    backgroundColor: '#FFF4E5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: 120,
+  },
+  placeBadgeText: {
+    fontSize: 10,
+    color: '#D95C14',
+    fontWeight: '600',
   },
   statusBadge: {
     backgroundColor: '#EEEEF0',

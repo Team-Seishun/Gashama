@@ -244,6 +244,17 @@ export default function ReportCreateScreen() {
     }
   };
 
+  const handleBack = () => {
+    Alert.alert(
+      '作成をキャンセルしますか？',
+      '入力中の内容は破棄され、カメラ画面に戻ります。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '破棄して戻る', style: 'destructive', onPress: () => router.replace('/camera') },
+      ]
+    );
+  };
+
   // モーダルで項目選択時
   const handleSelectSearchResult = (result: SearchResult) => {
     if (result.type === 'store') setSelectedStore(result.raw);
@@ -276,6 +287,14 @@ export default function ReportCreateScreen() {
       style={styles.safeArea}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* ヘッダー */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Ionicons name="chevron-back" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>在庫投稿の作成</Text>
+        <View style={{ width: 44 }} />
+      </View>
 
       {/* スクロール可能なコンテンツエリア */}
       <ScrollView
@@ -442,7 +461,26 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FAFAFA',
-    paddingTop: 30,
+    paddingTop: Platform.OS === 'android' ? 30 : 50,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEAEA',
+  },
+  backButton: {
+    padding: 8,
+    width: 44,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
   },
   sectionTitle: {
     fontSize: 14,
