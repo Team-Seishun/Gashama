@@ -95,18 +95,6 @@ export default function PostScreen() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-
-              {/* フィルタータグ */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsContainer}>
-                <View style={styles.tag}>
-                  <Ionicons name="search" size={14} color="#666" style={{ marginRight: 4 }} />
-                  <Text style={styles.tagText}>ちいかわ (ハチワレ)</Text>
-                </View>
-                <View style={styles.tag}>
-                  <Ionicons name="search" size={14} color="#666" style={{ marginRight: 4 }} />
-                  <Text style={styles.tagText}>サンリオ (シナモロール)</Text>
-                </View>
-              </ScrollView>
             </View>
 
             {/* リスト表示 */}
@@ -181,24 +169,6 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#666',
   },
 
   // リスト
