@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
 
 type ItemType = {
@@ -135,10 +136,11 @@ export default function TradeCreateScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.safeArea}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.safeArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, paddingBottom: 150 }}
@@ -244,7 +246,8 @@ export default function TradeCreateScreen() {
           )}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -252,7 +255,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FAFAFA',
-    paddingTop: 20,
   },
   pageTitle: {
     fontSize: 22,
