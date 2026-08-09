@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+
 import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ReportItem } from './InventoryCard';
 
@@ -9,13 +9,7 @@ type Props = {
 };
 
 export default function ReportDetailModal({ report, onClose }: Props) {
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (report) {
-      setNow(Date.now());
-    }
-  }, [report]);
+  const now = Date.now();
 
   return (
     <Modal
