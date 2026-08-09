@@ -13,6 +13,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
+import { getProfileIconSource } from '@/features/profile/profile-icons';
 
 interface Trade {
   id: string;
@@ -31,6 +32,7 @@ interface Trade {
   item_give?: string | null;
   item_want?: string | null;
   is_requesting?: boolean;
+  profiles?: any;
 }
 
 export default function TradeList() {
@@ -47,7 +49,7 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url')
+        .select('id, user_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -153,13 +155,22 @@ export default function TradeList() {
     const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
     const colorIndex = (item.user_name || '').length % colors.length;
     const userColor = colors[colorIndex];
+    const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.profileSection}>
-            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor }]}>
-              <Ionicons name="person" size={20} color="#999" />
+            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor, overflow: 'hidden' }]}>
+              {profile?.icon_image ? (
+                <Image
+                  source={getProfileIconSource(profile.icon_image)}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Ionicons name="person" size={20} color="#999" />
+              )}
             </View>
             <View style={styles.userInfo}>
               <View style={styles.userNameRow}>
