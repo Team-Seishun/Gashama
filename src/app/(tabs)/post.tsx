@@ -34,11 +34,18 @@ export default function PostScreen() {
 
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loadingInventories, setLoadingInventories] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const ITEMS_PER_PAGE = 20;
+
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
     setLoadingInventories(true);
+    setPage(0);
+    setHasMore(true);
     try {
       let query = supabase
         .from('reports')
@@ -59,17 +66,66 @@ export default function PostScreen() {
         query = query.eq('gachapon_item_id', filterId);
       }
 
-      const { data, error } = await query.limit(30);
+      const { data, error } = await query.range(0, ITEMS_PER_PAGE - 1);
 
       if (error) {
         console.error('在庫情報の取得エラー:', error);
       } else if (data) {
         setInventories(data as any as ReportItem[]);
+        if (data.length < ITEMS_PER_PAGE) {
+          setHasMore(false);
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
       setLoadingInventories(false);
+    }
+  };
+
+  const fetchMoreInventories = async () => {
+    if (!hasMore || loadingMore || loadingInventories) return;
+
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    const from = nextPage * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    try {
+      let query = supabase
+        .from('reports')
+        .select(`
+          *,
+          profiles!reports_user_id_fkey(nickname, icon_image),
+          stores(*),
+          gachapons(*),
+          gachapon_items(*)
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (filterType === 'store' && filterId) {
+        query = query.eq('store_id', filterId);
+      } else if (filterType === 'gachapon' && filterId) {
+        query = query.eq('gachapon_id', filterId);
+      } else if (filterType === 'item' && filterId) {
+        query = query.eq('gachapon_item_id', filterId);
+      }
+
+      const { data, error } = await query.range(from, to);
+
+      if (error) {
+        console.error('追加の在庫情報取得エラー:', error);
+      } else if (data) {
+        setInventories(prev => [...prev, ...data as any as ReportItem[]]);
+        setPage(nextPage);
+        if (data.length < ITEMS_PER_PAGE) {
+          setHasMore(false);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -127,11 +183,17 @@ export default function PostScreen() {
                 data={inventories}
                 keyExtractor={(item) => item.id}
                 renderItem={renderInventoryItem}
-                estimatedItemSize={160}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                refreshing={loadingInventories}
+                refreshing={loadingInventories && inventories.length > 0}
                 onRefresh={fetchInventories}
+                onEndReached={fetchMoreInventories}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loadingMore ? (
+                    <ActivityIndicator size="small" color="#FF7A00" style={{ marginVertical: 20 }} />
+                  ) : null
+                }
                 ListEmptyComponent={
                   <Text style={{ textAlign: 'center', color: '#999', marginTop: 40 }}>在庫報告がありません。</Text>
                 }
