@@ -6,7 +6,7 @@ import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -46,7 +46,7 @@ type TradeRoomItem = {
 export default function ProfileScreen() {
   const router = useRouter();
   const { session, initialized } = useAuth();
-  
+
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'inventory' | 'activeTrade' | 'completedTrade'>('inventory');
 
@@ -54,7 +54,7 @@ export default function ProfileScreen() {
   const [inventoryReports, setInventoryReports] = useState<InventoryReport[]>([]);
   const [activeTrades, setActiveTrades] = useState<TradeRoomItem[]>([]);
   const [completedTrades, setCompletedTrades] = useState<TradeRoomItem[]>([]);
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -108,20 +108,24 @@ export default function ProfileScreen() {
         .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
         .order('created_at', { ascending: false });
 
-      if (roomsData) {
+      if (roomsData && roomsData.length > 0) {
+        // 1. 全ルームから相手のIDだけを抽出して重複を削除
+        const partnerIds = roomsData.map(room => room.user_1_id === userId ? room.user_2_id : room.user_1_id).filter(Boolean);
+        const uniquePartnerIds = [...new Set(partnerIds)];
+        // 2. 相手のプロフィールを1回のクエリで一括取得
+        const { data: partnersData } = await supabase
+          .from('profiles')
+          .select('id, nickname')
+          .in('id', uniquePartnerIds);
+        // 3. IDをキーにした辞書を作成して高速にアクセスできるようにする
+        const profileMap = new Map();
+        partnersData?.forEach(p => profileMap.set(p.id, p.nickname));
         const activeList: TradeRoomItem[] = [];
         const completedList: TradeRoomItem[] = [];
-
         for (const room of roomsData) {
           const partnerId = room.user_1_id === userId ? room.user_2_id : room.user_1_id;
-          let partnerName = 'トレーダー';
-          if (partnerId) {
-            const { data: partnerProfile } = await profileApi.getProfileByUserId(partnerId);
-            if (partnerProfile) {
-              partnerName = partnerProfile.nickname || 'トレーダー';
-            }
-          }
-
+          // 辞書から名前を取得
+          const partnerName = partnerId ? (profileMap.get(partnerId) || 'トレーダー') : 'トレーダー';
           const item: TradeRoomItem = {
             id: room.id,
             trade_id: room.trade_id,
@@ -129,14 +133,12 @@ export default function ProfileScreen() {
             created_at: room.created_at,
             partnerNickname: partnerName,
           };
-
           if (room.status === 'completed' || room.status === 'rejected') {
             completedList.push(item);
           } else {
             activeList.push(item);
           }
         }
-
         setActiveTrades(activeList);
         setCompletedTrades(completedList);
       }
@@ -168,8 +170,12 @@ export default function ProfileScreen() {
         text: 'ログアウト',
         style: 'destructive',
         onPress: async () => {
-          await authApi.signOut();
-          router.replace('/(auth)/login' as any);
+          const { error } = await authApi.signOut();
+          if (error) {
+            Alert.alert('ログアウト失敗', 'ログアウトに失敗しました。');
+          } else {
+            router.replace('/(auth)/login' as any);
+          }
         },
       },
     ]);
