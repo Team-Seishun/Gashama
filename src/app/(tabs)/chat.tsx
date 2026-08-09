@@ -45,21 +45,23 @@ const ChatListItem = memo(({ item, onPress }: { item: ChatRoomWithPartner, onPre
         <View style={styles.chatHeader}>
           <View style={styles.tradeTitleContainer}>
             <View style={styles.badgeOffer}><Text style={styles.badgeText}>出</Text></View>
-            <Text style={styles.tradeTitleItem} numberOfLines={1}>アメ A</Text>
+            <Text style={styles.tradeTitleItem} numberOfLines={1}>{item.trade?.item_give || 'なし'}</Text>
             
             <Ionicons name="swap-horizontal" size={14} color="#D95C14" style={{ marginHorizontal: 4 }} />
             
             <View style={styles.badgeRequest}><Text style={styles.badgeText}>求</Text></View>
-            <Text style={styles.tradeTitleItem} numberOfLines={1}>ビーフ</Text>
+            <Text style={styles.tradeTitleItem} numberOfLines={1}>{item.trade?.item_want || 'なし'}</Text>
           </View>
           <Text style={styles.timeText}>{formatTimeAgo(item.latestMessageTime)}</Text>
         </View>
         
-        {/* 2行目: ガチャポン名と相手のユーザー名 (現在はモック表示) */}
+        {/* 2行目: ガチャポン名と相手のユーザー名 */}
         <View style={styles.tradeSummaryRow}>
           <View style={styles.gachaponTag}>
             <Ionicons name="cube" size={12} color="#FF7A00" style={{ marginRight: 4 }} />
-            <Text style={styles.gachaponName} numberOfLines={1}>ちいかわ (ハチワレ)</Text>
+            <Text style={styles.gachaponName} numberOfLines={1}>
+              {Array.isArray(item.trade?.gachapons) ? item.trade?.gachapons[0]?.name : item.trade?.gachapons?.name || '不明'}
+            </Text>
           </View>
           <Text style={{ color: '#E0E0E0', marginHorizontal: 6 }}>|</Text>
           <Ionicons name="person-circle" size={14} color="#007AFF" style={{ marginRight: 2 }} />
@@ -98,7 +100,7 @@ export default function ChatListScreen() {
         // 1. 自分が参加しているチャットルーム一覧を取得
         const { data: roomsData, error: roomsError } = await supabase
           .from('chat_rooms')
-          .select('*')
+          .select('*, trades(item_give, item_want, gachapons(name))')
           .or(`user_1_id.eq.${userId},user_2_id.eq.${userId}`)
           .order('updated_at', { ascending: false });
 
@@ -157,15 +159,15 @@ export default function ChatListScreen() {
             }
           }
           
-          // 未読メッセージ件数を取得 (自分が受信者で未読のもの)
-          const unreadCount = roomMessages.filter(m => !m.is_read && m.sender_id !== userId).length;
-          
+          const unreadCount = roomMessages.filter(m => m.sender_id !== userId && !m.is_read).length;
+
           return {
             ...room,
             partner,
+            trade: Array.isArray(room.trades) ? room.trades[0] : room.trades,
             latestMessage: latestMessageText,
-            latestMessageTime: latestMsg ? latestMsg.created_at : room.created_at,
-            unreadCount
+            latestMessageTime: latestMsg?.created_at || room.updated_at,
+            unreadCount,
           } as ChatRoomWithPartner;
         });
 

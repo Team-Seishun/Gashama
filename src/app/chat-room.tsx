@@ -1,27 +1,27 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState, useRef } from 'react';
-import * as ImagePicker from 'expo-image-picker';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ActivityIndicator,
-  Modal
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { MessageBubble } from '@/features/chat/components/MessageBubble';
+import { ReviewModal } from '@/features/chat/components/ReviewModal';
+import { useChatRoom } from '@/features/chat/hooks/useChatRoom';
+import { ChatMessage } from '@/features/chat/types';
+import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { supabase } from '@/utils/supabase';
-import { useAuth } from '@/features/auth/hooks/useAuth';
-import { ReviewModal } from '@/features/chat/components/ReviewModal';
-import { MessageBubble } from '@/features/chat/components/MessageBubble';
-import { ChatMessage } from '@/features/chat/types';
-import { useChatRoom } from '@/features/chat/hooks/useChatRoom';
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRef, useState } from 'react';
+import {
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CHAT_COLORS = {
   primary: '#FF7A00',
@@ -55,6 +55,7 @@ export default function ChatRoomScreen() {
     myProfile,
     chatRoom,
     setChatRoom,
+    trade,
     isLoading
   } = useChatRoom(roomId, session?.user?.id, scrollViewRef);
 
@@ -304,7 +305,9 @@ export default function ChatRoomScreen() {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle} numberOfLines={1}>出:アメA ⇄ 求:ビーフ</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              出:{trade?.item_give || '未設定'} ⇄ 求:{trade?.item_want || '未設定'}
+            </Text>
           </View>
           <TouchableOpacity 
             style={[styles.completeButton, isCompleted && styles.completedButton]}
@@ -324,14 +327,14 @@ export default function ChatRoomScreen() {
           <View style={styles.tradeInfoBannerContent}>
             <View style={styles.tradeInfoBannerItem}>
               <View style={styles.tradeInfoBadgeOffer}><Text style={styles.tradeInfoBadgeText}>出</Text></View>
-              <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
-              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>アメ A</Text>
+              <Image source={{ uri: trade?.photo_url || `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
+              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>{trade?.item_give || '未設定'}</Text>
             </View>
             <Ionicons name="swap-horizontal" size={20} color="#D95C14" style={{ marginHorizontal: 8 }} />
             <View style={styles.tradeInfoBannerItem}>
               <View style={styles.tradeInfoBadgeRequest}><Text style={styles.tradeInfoBadgeText}>求</Text></View>
-              <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_request/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
-              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>ビーフ</Text>
+              <Image source={{ uri: trade?.photo_url || `https://picsum.photos/seed/${chatRoom?.trade_id}_request/100/100` }} style={styles.tradeInfoItemImage} contentFit="cover" />
+              <Text style={styles.tradeInfoBannerItemName} numberOfLines={1}>{trade?.item_want || '未設定'}</Text>
             </View>
           </View>
         </View>
@@ -401,10 +404,10 @@ export default function ChatRoomScreen() {
                   <Text style={styles.applicantMessage}>が以下のアイテムとの交換を提案しています</Text>
                   
                   <View style={styles.proposedItemCard}>
-                    <Image source={{ uri: `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/150/150` }} style={styles.proposedItemImage} />
+                    <Image source={{ uri: trade?.photo_url || `https://picsum.photos/seed/${chatRoom?.trade_id}_offer/150/150` }} style={styles.proposedItemImage} />
                     <View style={styles.proposedItemInfo}>
                       <Text style={styles.proposedItemLabel}>提示アイテム</Text>
-                      <Text style={styles.proposedItemName} numberOfLines={2}>アメ A (モック)</Text>
+                      <Text style={styles.proposedItemName} numberOfLines={2}>{trade?.item_give || '未設定'}</Text>
                     </View>
                   </View>
                 </View>

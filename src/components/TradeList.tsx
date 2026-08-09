@@ -50,7 +50,8 @@ export default function TradeList() {
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
 
   const fetchTrades = async () => {
     try {
@@ -61,12 +62,14 @@ export default function TradeList() {
 
       if (tradeError) {
         console.error('Error fetching trades:', tradeError);
-        setErrorMsg('データの取得に失敗しました');
+        setFetchError('データの取得に失敗しました');
       } else if (tradeData) {
+        setFetchError(null);
         setTrades(tradeData as Trade[]);
       }
     } catch (err) {
       console.error('Unexpected error:', err);
+      setFetchError('データの取得に失敗しました');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -111,9 +114,10 @@ export default function TradeList() {
     return filtered;
   }, [filterType, filterId, trades]);
 
-  const errorMsg = filteredTrades.length === 0 && trades.length > 0 
-    ? '条件に一致するトレードがありません' 
-    : null;
+  const errorMsg = fetchError
+    ?? (filteredTrades.length === 0 && trades.length > 0
+      ? '条件に一致するトレードがありません'
+      : null);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -121,20 +125,56 @@ export default function TradeList() {
   };
 
   const handleTradeAction = useCallback(async (item: Trade) => {
-    if (requestedTradeIds.has(item.id)) return;
+    if (requestedTradeIds.has(item.id) || processingTradeId) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (user) {
-        await supabase
-          .from('trade_requests')
-          .insert({
-            trade_id: item.id,
-            sender_id: user.id,
-            status: '申請中',
-          });
+      if (item.user_id === user.id) {
+        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+        return;
       }
+
+      setProcessingTradeId(item.id);
+
+      const { error: requestError } = await supabase
+        .from('trade_requests')
+        .insert({
+          trade_id: item.id,
+          applicant_id: user.id,
+          status: 0,
+        });
+      if (requestError) throw requestError;
+
+      const { error: updateError } = await supabase
+        .from('trades')
+        .update({ status: 1 })
+        .eq('id', item.id);
+      if (updateError) throw updateError;
+
+      const { data: newRoom, error: roomError } = await supabase
+        .from('chat_rooms')
+        .insert({
+          trade_id: item.id,
+          user_1_id: user.id,
+          user_2_id: item.user_id,
+          status: 'pending'
+        })
+        .select('id')
+        .single();
+      if (roomError) throw roomError;
+
+      const targetRoomId = newRoom.id;
+
+      const { error: messageError } = await supabase
+        .from('chat_messages')
+        .insert({
+          room_id: targetRoomId,
+          sender_id: user.id,
+          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
+        });
+      if (messageError) throw messageError;
 
       setRequestedTradeIds((prev) => new Set(prev).add(item.id));
       setTrades((prev) =>
@@ -142,17 +182,20 @@ export default function TradeList() {
       );
 
       router.push({
-        pathname: '/chat',
-        params: { tradeId: item.id, userName: item.user_name || '匿名ユーザー' },
+        pathname: '/chat-room',
+        params: { roomId: targetRoomId },
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
       Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
+    } finally {
+      setProcessingTradeId(null);
     }
-  }, [requestedTradeIds, router]);
+  }, [requestedTradeIds, processingTradeId, router]);
 
   const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
+    const isProcessing = processingTradeId === item.id;
     const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
     const colorIndex = (item.user_name || '').length % colors.length;
     const userColor = colors[colorIndex];
@@ -250,10 +293,13 @@ export default function TradeList() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={styles.tradeButton}
+              style={[styles.tradeButton, isProcessing && styles.tradeButtonDisabled]}
               onPress={() => handleTradeAction(item)}
+              disabled={isProcessing}
             >
-              <Text style={styles.tradeButtonText}>トレードを提案する</Text>
+              <Text style={styles.tradeButtonText}>
+                {isProcessing ? '処理中...' : 'トレードを提案する'}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -265,7 +311,7 @@ export default function TradeList() {
         </View>
       </View>
     );
-  }, [requestedTradeIds, handleTradeAction]);
+  }, [requestedTradeIds, processingTradeId, handleTradeAction]);
 
   if (loading) {
     return (
@@ -519,6 +565,9 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tradeButtonDisabled: {
+    opacity: 0.6,
   },
   tradeButtonText: {
     color: '#FFFFFF',
