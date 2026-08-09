@@ -1,12 +1,9 @@
-import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar, ActivityIndicator, Modal } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
-import { useAuth } from '@/features/auth/hooks/useAuth';
 import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
 import SearchBar from '@/components/SearchBar';
@@ -17,7 +14,6 @@ import ReportDetailModal from '@/components/ReportDetailModal';
 // ----------------------------------------------------
 export default function PostScreen() {
   const router = useRouter();
-  const { session } = useAuth();
   const { tab, filterType, filterId, filterName } = useLocalSearchParams<{
     tab: string;
     filterType: string;
@@ -26,12 +22,14 @@ export default function PostScreen() {
   }>();
   
   const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>(tab === 'trade' ? 'trade' : 'inventory');
+  const [prevTab, setPrevTab] = useState(tab);
 
-  useEffect(() => {
+  if (tab !== prevTab) {
+    setPrevTab(tab);
     if (tab === 'trade' || tab === 'inventory') {
       setActiveTab(tab);
     }
-  }, [tab]);
+  }
 
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loadingInventories, setLoadingInventories] = useState(false);
@@ -132,7 +130,9 @@ export default function PostScreen() {
 
   // fetchInventoriesに依存配列を設定
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchInventories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterId]);
 
   const renderInventoryItem = useCallback(({ item }: { item: ReportItem }) => (

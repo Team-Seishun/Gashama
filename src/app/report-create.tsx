@@ -16,8 +16,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
-import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
+import { ItemType, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
 import SearchMasterView, { SearchMasterMode, SearchResult } from '@/components/search-master-view';
 
@@ -86,6 +85,7 @@ export default function ReportCreateScreen() {
           }
         });
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGachaponItems([]);
     }
     return () => { isMounted = false; };

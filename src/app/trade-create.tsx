@@ -57,6 +57,7 @@ export default function TradeCreateScreen() {
 
   useEffect(() => {
     if (!gachaponId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingItems(false);
       return;
     }

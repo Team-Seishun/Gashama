@@ -50,7 +50,7 @@ export default function TradeList() {
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
 
   const fetchTrades = async () => {
     try {
@@ -111,13 +111,9 @@ export default function TradeList() {
     return filtered;
   }, [filterType, filterId, trades]);
 
-  useEffect(() => {
-    if (filteredTrades.length === 0 && trades.length > 0) {
-      setErrorMsg('条件に一致するトレードがありません');
-    } else {
-      setErrorMsg(null);
-    }
-  }, [filteredTrades, trades.length]);
+  const errorMsg = filteredTrades.length === 0 && trades.length > 0 
+    ? '条件に一致するトレードがありません' 
+    : null;
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -293,7 +289,6 @@ export default function TradeList() {
         data={filterType ? filteredTrades : trades}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        estimatedItemSize={250}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

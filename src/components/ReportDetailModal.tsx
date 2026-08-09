@@ -12,6 +12,7 @@ type Props = {
 export default function ReportDetailModal({ report, onClose }: Props) {
   const profile = Array.isArray(report?.profiles) ? report?.profiles[0] : report?.profiles;
   const gachapon = Array.isArray(report?.gachapons) ? report?.gachapons[0] : report?.gachapons;
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
 
   return (
