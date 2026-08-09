@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
 import SearchBar from '@/components/SearchBar';
+import ReportDetailModal from '@/components/ReportDetailModal';
 
 // ----------------------------------------------------
 // メインコンポーネント
@@ -16,37 +17,49 @@ import SearchBar from '@/components/SearchBar';
 export default function PostScreen() {
   const router = useRouter();
   const { session } = useAuth();
-  const { tab } = useLocalSearchParams<{ tab: string }>();
+  const { tab, filterType, filterId, filterName } = useLocalSearchParams<{
+    tab: string;
+    filterType: string;
+    filterId: string;
+    filterName: string;
+  }>();
+  
   const [activeTab, setActiveTab] = useState<'inventory' | 'trade'>(tab === 'trade' ? 'trade' : 'inventory');
 
   useEffect(() => {
-    if (tab === 'trade') {
-      setActiveTab('trade');
+    if (tab === 'trade' || tab === 'inventory') {
+      setActiveTab(tab);
     }
   }, [tab]);
 
   const [inventories, setInventories] = useState<ReportItem[]>([]);
   const [loadingInventories, setLoadingInventories] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
     setLoadingInventories(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('reports')
         .select(`
-          id,
-          photo_url,
-          stock_status,
-          created_at,
-          profiles ( nickname, icon_image ),
-          stores ( name ),
-          gachapons ( name ),
-          gachapon_items ( name )
+          *,
+          profiles!reports_user_id_fkey(nickname, icon_image),
+          stores(*),
+          gachapons(*),
+          gachapon_items(*)
         `)
-        .order('created_at', { ascending: false })
-        .limit(30);
+        .order('created_at', { ascending: false });
+        
+      if (filterType === 'store' && filterId) {
+        query = query.eq('store_id', filterId);
+      } else if (filterType === 'gachapon' && filterId) {
+        query = query.eq('gachapon_id', filterId);
+      } else if (filterType === 'item' && filterId) {
+        query = query.eq('gachapon_item_id', filterId);
+      }
+
+      const { data, error } = await query.limit(30);
 
       if (error) {
         console.error('在庫情報の取得エラー:', error);
@@ -60,11 +73,10 @@ export default function PostScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchInventories();
-    }, [])
-  );
+  // fetchInventoriesに依存配列を設定
+  useEffect(() => {
+    fetchInventories();
+  }, [filterType, filterId]);
 
 
   return (
@@ -92,8 +104,9 @@ export default function PostScreen() {
             {/* 検索バー */}
             <View style={styles.searchSection}>
               <SearchBar
-                value={searchQuery}
-                onChangeText={setSearchQuery}
+                value={filterName || ''}
+                onPress={() => router.push({ pathname: '/search', params: { returnTo: 'post', activeTab: 'inventory' } })}
+                onClear={() => router.setParams({ filterType: '', filterId: '', filterName: '' })}
               />
             </View>
 
@@ -104,7 +117,14 @@ export default function PostScreen() {
               <FlashList
                 data={inventories}
                 keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <InventoryCard item={item} />}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedReport(item)}
+                  >
+                    <InventoryCard item={item} />
+                  </TouchableOpacity>
+                )}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshing={loadingInventories}
@@ -120,6 +140,11 @@ export default function PostScreen() {
         {activeTab === 'trade' && <TradeList />}
 
       </View>
+
+      <ReportDetailModal
+        report={selectedReport}
+        onClose={() => setSelectedReport(null)}
+      />
     </SafeAreaView>
   );
 }
