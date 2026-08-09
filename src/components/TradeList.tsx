@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
 
 interface Trade {
@@ -149,12 +150,17 @@ export default function TradeList() {
 
   const renderItem = ({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
+    const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
+    const colorIndex = (item.user_name || '').length % colors.length;
+    const userColor = colors[colorIndex];
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.profileSection}>
-            <View style={styles.avatarPlaceholder} />
+            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor }]}>
+              <Ionicons name="person" size={20} color="#999" />
+            </View>
             <View style={styles.userInfo}>
               <View style={styles.userNameRow}>
                 <Text style={styles.userName}>{item.user_name || '匿名ユーザー'}</Text>
@@ -168,7 +174,7 @@ export default function TradeList() {
             </View>
           </View>
           <TouchableOpacity style={styles.moreButton}>
-            <Text style={styles.moreButtonText}>⋮</Text>
+            <Ionicons name="ellipsis-vertical" size={20} color="#D95C14" />
           </TouchableOpacity>
         </View>
 
@@ -186,13 +192,15 @@ export default function TradeList() {
               {item.photo_url ? (
                 <Image source={{ uri: item.photo_url }} style={styles.itemImage} />
               ) : (
-                <View style={styles.imagePlaceholder} />
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="image-outline" size={30} color="#CCC" />
+                </View>
               )}
             </View>
           </View>
 
           <View style={styles.connectorArrow}>
-            <Text style={styles.arrowText}>⇄</Text>
+            <Ionicons name="swap-horizontal" size={16} color="#994700" />
           </View>
 
           <View style={styles.itemSection}>
@@ -205,7 +213,9 @@ export default function TradeList() {
               </View>
             </View>
             <View style={styles.imageContainer}>
-              <View style={styles.imagePlaceholder} />
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={30} color="#CCC" />
+              </View>
             </View>
           </View>
         </View>
@@ -352,10 +362,9 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: 40,
     height: 40,
-    borderRadius: 9999,
-    borderWidth: 2,
-    borderColor: 'rgba(153, 71, 0, 0.1)',
-    backgroundColor: '#EEEEF0',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   userInfo: {
     justifyContent: 'center',
@@ -470,6 +479,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#EEEEF0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   connectorArrow: {
     position: 'absolute',
