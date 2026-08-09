@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/utils/supabase';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
@@ -38,9 +38,14 @@ interface Trade {
 
 export default function TradeList() {
   const router = useRouter();
+  const { filterType, filterId, filterName } = useLocalSearchParams<{
+    filterType: string;
+    filterId: string;
+    filterName: string;
+  }>();
+
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -50,7 +55,7 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image)')
+        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -93,21 +98,22 @@ export default function TradeList() {
     };
   }, []);
 
-  const handleSearch = (text: string) => {
-    setSearchQuery(text);
-    if (text.trim() === '') {
-      setFilteredTrades(trades);
-    } else {
-      const filtered = trades.filter((item) => {
-        const query = text.toLowerCase();
-        const give = item.item_give ? item.item_give.toLowerCase() : '';
-        const want = item.item_want ? item.item_want.toLowerCase() : '';
-        const user = item.user_name ? item.user_name.toLowerCase() : '';
-        return give.includes(query) || want.includes(query) || user.includes(query);
-      });
-      setFilteredTrades(filtered);
+  useEffect(() => {
+    let filtered = trades;
+    
+    if (filterType === 'store' && filterId) {
+      filtered = trades.filter(trade => trade.store_id === filterId);
+    } else if (filterType === 'gachapon' && filterId) {
+      filtered = trades.filter(trade => trade.gachapon_id === filterId);
     }
-  };
+
+    setFilteredTrades(filtered);
+    if (filtered.length === 0 && trades.length > 0) {
+      setErrorMsg('条件に一致するトレードがありません');
+    } else {
+      setErrorMsg(null);
+    }
+  }, [filterType, filterId, trades]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -268,13 +274,14 @@ export default function TradeList() {
     <View style={styles.container}>
       <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
         <SearchBar
-          value={searchQuery}
-          onChangeText={handleSearch}
+          value={filterName || ''}
+          onPress={() => router.push({ pathname: '/search', params: { returnTo: 'post', activeTab: 'trade' } })}
+          onClear={() => router.setParams({ filterType: '', filterId: '', filterName: '' })}
         />
       </View>
 
       <FlashList
-        data={searchQuery.trim() === '' ? trades : filteredTrades}
+        data={filterType ? filteredTrades : trades}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
