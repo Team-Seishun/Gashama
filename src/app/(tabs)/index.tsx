@@ -4,8 +4,9 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import ReportDetailModal from '@/components/ReportDetailModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -550,91 +551,10 @@ export default function MapScreen() {
       </BottomSheet>
 
       {/* 投稿詳細モーダル */}
-      <Modal
-        visible={!!selectedImageReport}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSelectedImageReport(null)}
-      >
-        <View style={styles.modalOverlay}>
-          {/* 背景タップで閉じる */}
-          <TouchableOpacity
-            style={styles.modalCloseArea}
-            activeOpacity={1}
-            onPress={() => setSelectedImageReport(null)}
-          />
-          <View style={styles.modalContent}>
-            {/* 閉じるボタン */}
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setSelectedImageReport(null)}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
-
-            {/* 画像 */}
-            {selectedImageReport?.photo_url ? (
-              <Image
-                source={{ uri: selectedImageReport.photo_url }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            ) : (
-              <View style={[styles.modalImage, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="image-outline" size={64} color="#666" />
-              </View>
-            )}
-
-            {/* 詳細情報 */}
-            <View style={styles.modalInfoBox}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                {selectedImageReport?.profiles?.icon_image && selectedImageReport.profiles.icon_image.startsWith('http') ? (
-                  <Image source={{ uri: selectedImageReport.profiles.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                ) : (
-                  <Ionicons name="person-circle" size={40} color="#ccc" style={{ marginLeft: -2 }} />
-                )}
-                <View style={{ marginLeft: 8 }}>
-                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: 'bold' }}>
-                    {selectedImageReport?.profiles?.nickname || '名無しさん'}
-                  </Text>
-                  <Text style={{ color: '#aaa', fontSize: 12 }}>
-                    @{selectedImageReport?.profiles?.id ? selectedImageReport.profiles.id.substring(0, 8) : 'unknown'}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.modalItemName}>{selectedImageReport?.gachapons?.name || '不明な商品'}</Text>
-
-              <View style={styles.modalStatusRow}>
-                <View style={[styles.statusBadge, {
-                  backgroundColor: selectedImageReport?.stock_status === 2 ? '#FFF2E5' :
-                    selectedImageReport?.stock_status === 1 ? '#E5F1FF' : '#F2F2F7'
-                }]}>
-                  <Text style={[styles.statusBadgeText, {
-                    color: selectedImageReport?.stock_status === 2 ? '#FF7A00' :
-                      selectedImageReport?.stock_status === 1 ? '#007AFF' : '#8E8E93'
-                  }]}>
-                    {selectedImageReport?.stock_status === 2 ? '在庫あり' :
-                      selectedImageReport?.stock_status === 1 ? '残りわずか' : '売り切れ'}
-                  </Text>
-                </View>
-
-                <Text style={styles.modalTimeText}>
-                  {selectedImageReport?.created_at ? (() => {
-                    const diff = now - new Date(selectedImageReport.created_at).getTime();
-                    const seconds = Math.floor(diff / 1000);
-                    if (seconds < 60) return `${seconds}秒前`;
-                    const minutes = Math.floor(seconds / 60);
-                    if (minutes < 60) return `${minutes}分前`;
-                    const hours = Math.floor(minutes / 60);
-                    return hours < 24 ? `${hours}時間前` : `${Math.floor(hours / 24)}日前`;
-                  })() : ''}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ReportDetailModal 
+        report={selectedImageReport} 
+        onClose={() => setSelectedImageReport(null)} 
+      />
     </View>
   );
 }

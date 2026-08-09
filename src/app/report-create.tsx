@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,20 +10,15 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
-import { GachaponItem, ItemType, StoreItem, useMasterData } from '../hooks/useMasterData';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ItemType, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
-
-// モーダル選択用共通型
-type ModalOptionItem = {
-  id: string;
-  name: string;
-  raw: StoreItem | GachaponItem | ItemType;
-};
+import SearchMasterView, { SearchMasterMode, SearchResult } from '@/components/search-master-view';
 
 export default function ReportCreateScreen() {
   const router = useRouter();
@@ -59,9 +54,6 @@ export default function ReportCreateScreen() {
 
   // カスタムフックでマスターデータを取得・管理
   const {
-    stores,
-    gachapons,
-    items,
     fetching,
     loadError,
     selectedStore,
@@ -77,10 +69,33 @@ export default function ReportCreateScreen() {
     itemId: paramItemId,
   });
 
+  const [gachaponItems, setGachaponItems] = useState<ItemType[]>([]);
+
+  // ガチャガチャが選択されたらその中身を取得する
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedGachapon) {
+      supabase
+        .from('gachapon_items')
+        .select('id, name')
+        .eq('gachapon_id', selectedGachapon.id)
+        .then((res) => {
+          if (isMounted && res.data) {
+            setGachaponItems(res.data);
+          }
+        });
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setGachaponItems([]);
+    }
+    return () => { isMounted = false; };
+  }, [selectedGachapon]);
+
   // モーダルの開閉状態
-  const [modalType, setModalType] = useState<'store' | 'gachapon' | 'item' | null>(null);
+  const [modalType, setModalType] = useState<SearchMasterMode | null>(null);
 
   const [stockStatus, setStockStatus] = useState<number>(2); // 2: 在庫あり, 1: 残りわずか, 0: 売り切れ
+  const [isCreatingTrade, setIsCreatingTrade] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
 
   const isSupportedImageUri = (uri: string) =>
@@ -122,6 +137,11 @@ export default function ReportCreateScreen() {
 
     if (!imageUri) {
       Alert.alert('写真が必要です', 'プレイ証明写真を撮影してください。');
+      return;
+    }
+
+    if (isCreatingTrade && !selectedItem) {
+      Alert.alert('入力漏れ', 'トレードを募集する場合、「出たアイテム」の選択は必須です。');
       return;
     }
 
@@ -170,7 +190,7 @@ export default function ReportCreateScreen() {
       const photoUrl = publicUrlData.publicUrl;
 
       // 2. reports テーブルへのデータ挿入
-      const { error: dbError } = await supabase.from('reports').insert({
+      const { error: dbError, data: reportData } = await supabase.from('reports').insert({
         user_id: user.id,               // uuid (FK)
         store_id: selectedStore.id,     // uuid (FK)
         gachapon_id: selectedGachapon.id, // uuid (FK)
@@ -178,7 +198,7 @@ export default function ReportCreateScreen() {
         buytime: new Date().toISOString(), // timestamp
         photo_url: photoUrl,            // string
         stock_status: stockStatus,      // int (0: 売り切れ, 1: 残りわずか, 2: 在庫あり)
-      });
+      }).select().single();
 
       if (dbError) {
         // ロールバック: DB保存に失敗した場合はStorageから画像を削除
@@ -186,12 +206,32 @@ export default function ReportCreateScreen() {
         throw new Error(`DB保存失敗: ${dbError.message}`);
       }
 
-      Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/post'),
-        },
-      ]);
+      if (isCreatingTrade) {
+        Alert.alert('投稿完了', 'レポートを投稿しました！続けてトレード募集を作成します。', [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.replace({
+                pathname: '/trade-create',
+                params: {
+                  reportId: reportData.id,
+                  gachaponId: selectedGachapon.id,
+                  storeId: selectedStore.id,
+                  haveItemId: selectedItem?.id,
+                  photoUrl: photoUrl,
+                }
+              });
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/post'),
+          },
+        ]);
+      }
     } catch (error: any) {
       console.error('レポート投稿エラー:', error);
 
@@ -205,46 +245,62 @@ export default function ReportCreateScreen() {
     }
   };
 
-  // モーダルで項目選択時
-  const handleSelectModalItem = (rawItem: StoreItem | GachaponItem | ItemType) => {
-    if (modalType === 'store') setSelectedStore(rawItem as StoreItem);
-    if (modalType === 'gachapon') setSelectedGachapon(rawItem as GachaponItem);
-    if (modalType === 'item') setSelectedItem(rawItem as ItemType);
-    setModalType(null);
+  const handleBack = () => {
+    Alert.alert(
+      '作成をキャンセルしますか？',
+      '入力中の内容は破棄され、カメラ画面に戻ります。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '破棄して戻る', style: 'destructive', onPress: () => router.replace('/camera') },
+      ]
+    );
   };
 
-  const getModalData = (): ModalOptionItem[] => {
-    if (modalType === 'store') return stores.map((s) => ({ id: s.id, name: s.name, raw: s }));
-    if (modalType === 'gachapon') return gachapons.map((g) => ({ id: g.id, name: g.name, raw: g }));
-    if (modalType === 'item') return items.map((i) => ({ id: i.id, name: i.name, raw: i }));
-    return [];
+  // モーダルで項目選択時
+  const handleSelectSearchResult = (result: SearchResult) => {
+    if (result.type === 'store') setSelectedStore(result.raw);
+    if (result.type === 'gachapon') setSelectedGachapon(result.raw);
+    setModalType(null);
   };
 
   if (fetching) {
     return (
-      <View style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#FF6F00" />
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#FF6F00" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (loadError) {
     return (
-      <View style={[styles.safeArea, styles.errorContainer]}>
-        <Text style={styles.errorTitle}>データの読み込みに失敗しました</Text>
-        <Text style={styles.errorText}>{loadError}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchMasterData}>
-          <Text style={styles.retryButtonText}>再読み込み</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>データの読み込みに失敗しました</Text>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchMasterData}>
+            <Text style={styles.retryButtonText}>再読み込み</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.safeArea}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      {/* ヘッダー */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Ionicons name="chevron-back" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>在庫投稿の作成</Text>
+        <View style={{ width: 44 }} />
+      </View>
 
       {/* スクロール可能なコンテンツエリア */}
       <ScrollView
@@ -284,18 +340,33 @@ export default function ReportCreateScreen() {
             <Ionicons name="chevron-forward" size={18} color="#999" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.selectCard} onPress={() => setModalType('item')}>
-            <View style={styles.selectCardLeft}>
+          {/* 出たアイテム（吹き出し選択） */}
+          <View style={styles.chipSection}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="gift-outline" size={20} color="#9E4D00" />
-              <View style={{ marginLeft: 10, flex: 1 }}>
-                <Text style={styles.selectLabel}>出たアイテム（任意）</Text>
-                <Text style={styles.selectValue} numberOfLines={1}>
-                  {selectedItem ? selectedItem.name : '出た種類を選択してください'}
-                </Text>
-              </View>
+              <Text style={[styles.selectLabel, { marginLeft: 8 }]}>出たアイテム（任意）</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#999" />
-          </TouchableOpacity>
+            
+            {!selectedGachapon ? (
+              <Text style={styles.chipHint}>※先にガチャガチャ（商品名）を選択してください</Text>
+            ) : gachaponItems.length === 0 ? (
+              <Text style={styles.chipHint}>登録されているアイテム情報がありません</Text>
+            ) : (
+              <View style={styles.chipContainer}>
+                {gachaponItems.map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.chip, selectedItem?.id === item.id && styles.chipSelected]}
+                    onPress={() => setSelectedItem(selectedItem?.id === item.id ? null : item)}
+                  >
+                    <Text style={[styles.chipText, selectedItem?.id === item.id && styles.chipTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* 撮影エリア */}
@@ -348,6 +419,23 @@ export default function ReportCreateScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* トレード作成トグル */}
+        <View style={styles.tradeToggleContainer}>
+          <View style={{ flex: 1, marginRight: 16 }}>
+            <Text style={styles.tradeToggleTitle}>同時にトレードを募集する</Text>
+            <Text style={styles.tradeToggleDesc}>
+              この在庫報告に関連する商品の交換（トレード）募集を続けて作成します。
+            </Text>
+          </View>
+          <Switch
+            value={isCreatingTrade}
+            onValueChange={setIsCreatingTrade}
+            trackColor={{ false: '#E0E0E0', true: '#FF9E4D' }}
+            thumbColor={isCreatingTrade ? '#FF6F00' : '#F4F3F4'}
+            ios_backgroundColor="#E0E0E0"
+          />
+        </View>
+
         {/* 投稿ボタン */}
         <View style={styles.submitArea}>
           {loading ? (
@@ -361,45 +449,44 @@ export default function ReportCreateScreen() {
         </View>
       </ScrollView>
 
-      {/* 選択モーダル */}
-      <Modal visible={modalType !== null} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {modalType === 'store' && '店舗の選択'}
-                {modalType === 'gachapon' && 'ガチャガチャ（商品）の選択'}
-                {modalType === 'item' && '出たアイテムの選択'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalType(null)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <FlashList<ModalOptionItem>
-              data={getModalData()}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => handleSelectModalItem(item.raw)}
-                >
-                  <Text style={styles.modalItemText}>{item.name}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </View>
+      {/* 選択モーダル (全画面検索) */}
+      <Modal visible={modalType !== null} animationType="slide" transparent={false}>
+        {modalType && (
+          <SearchMasterView 
+            mode={modalType} 
+            onSelect={handleSelectSearchResult} 
+            onClose={() => setModalType(null)} 
+          />
+        )}
       </Modal>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
-    paddingTop: 30,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEAEA',
+  },
+  backButton: {
+    padding: 8,
+    width: 44,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
   },
   sectionTitle: {
     fontSize: 14,
@@ -439,6 +526,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginTop: 2,
+  },
+  chipSection: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    borderRadius: 12,
+    padding: 12,
+  },
+  chipHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 12,
+    marginLeft: 4,
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipSelected: {
+    backgroundColor: '#FFF8F5',
+    borderColor: '#FF6F00',
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#333',
+  },
+  chipTextSelected: {
+    color: '#FF6F00',
+    fontWeight: 'bold',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -606,5 +732,27 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  tradeToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+  },
+  tradeToggleTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  tradeToggleDesc: {
+    fontSize: 11,
+    color: '#888',
+    lineHeight: 16,
   },
 });

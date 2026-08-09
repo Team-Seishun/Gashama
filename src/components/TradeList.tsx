@@ -1,17 +1,21 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import SearchBar from '@/components/SearchBar';
+import { Profile, Store, formatTimeAgo } from '@/components/InventoryCard';
+import { getProfileIconSource } from '@/features/profile/profile-icons';
+import { supabase } from '@/utils/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
-  Image,
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View
+  View,
+  Alert
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
-import { supabase } from '../lib/supabase';
 
 interface Trade {
   id: string;
@@ -30,23 +34,29 @@ interface Trade {
   item_give?: string | null;
   item_want?: string | null;
   is_requesting?: boolean;
+  profiles?: Profile | Profile[];
+  stores?: Store | Store[];
 }
 
-export default function TradeScreen() {
+export default function TradeList() {
   const router = useRouter();
+  const { filterType, filterId, filterName } = useLocalSearchParams<{
+    filterType: string;
+    filterId: string;
+    filterName: string;
+  }>();
+
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
 
   const fetchTrades = async () => {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url')
+        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -64,14 +74,13 @@ export default function TradeScreen() {
   };
 
   useEffect(() => {
-    // 1. 初回データを取得する関数を中で定義して即時実行する
     const loadInitialData = async () => {
       await fetchTrades();
     };
     loadInitialData();
 
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('schema-db-changes-trades')
       .on(
         'postgres_changes',
         {
@@ -86,40 +95,38 @@ export default function TradeScreen() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      channel.unsubscribe();
     };
   }, []);
 
-  const handleSearch = (text: string) => {
-    setSearchQuery(text);
-    if (text.trim() === '') {
-      setFilteredTrades(trades);
-    } else {
-      const filtered = trades.filter((item) => {
-        const query = text.toLowerCase();
-        const give = item.item_give ? item.item_give.toLowerCase() : '';
-        const want = item.item_want ? item.item_want.toLowerCase() : '';
-        const user = item.user_name ? item.user_name.toLowerCase() : '';
-        return give.includes(query) || want.includes(query) || user.includes(query);
-      });
-      setFilteredTrades(filtered);
+  const filteredTrades = useMemo(() => {
+    let filtered = trades;
+
+    if (filterType === 'store' && filterId) {
+      filtered = trades.filter(trade => trade.store_id === filterId);
+    } else if (filterType === 'gachapon' && filterId) {
+      filtered = trades.filter(trade => trade.gachapon_id === filterId);
     }
-  };
+
+    return filtered;
+  }, [filterType, filterId, trades]);
+
+  const errorMsg = filteredTrades.length === 0 && trades.length > 0 
+    ? '条件に一致するトレードがありません' 
+    : null;
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchTrades();
   };
 
-  // 🚀 トレード提案時の処理（確実にチャット画面に遷移するよう調整）
-  const handleTradeAction = async (item: Trade) => {
+  const handleTradeAction = useCallback(async (item: Trade) => {
     if (requestedTradeIds.has(item.id)) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // 申請データをDBに保存（失敗してもチャット遷移は止めない）
         await supabase
           .from('trade_requests')
           .insert({
@@ -129,52 +136,68 @@ export default function TradeScreen() {
           });
       }
 
-      // ローカルのUI状態を即時更新
       setRequestedTradeIds((prev) => new Set(prev).add(item.id));
       setTrades((prev) =>
         prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
       );
-      setFilteredTrades((prev) =>
-        prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
-      );
 
-      // チャット画面へ確実に遷移
       router.push({
         pathname: '/chat',
         params: { tradeId: item.id, userName: item.user_name || '匿名ユーザー' },
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
-      // 万が一エラーになっても強制遷移
-      router.push({
-        pathname: '/chat',
-        params: { tradeId: item.id, userName: item.user_name || '匿名ユーザー' },
-      });
+      Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
     }
-  };
+  }, [requestedTradeIds, router]);
 
-  const renderItem = ({ item }: { item: Trade }) => {
+  const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
+    const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
+    const colorIndex = (item.user_name || '').length % colors.length;
+    const userColor = colors[colorIndex];
+    const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+    const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.profileSection}>
-            <View style={styles.avatarPlaceholder} />
+            <View style={[styles.avatarPlaceholder, { backgroundColor: userColor }]}>
+              {profile?.icon_image ? (
+                <Image
+                  source={getProfileIconSource(profile.icon_image)}
+                  style={styles.avatarImage}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <Ionicons name="person" size={20} color="#999" />
+              )}
+            </View>
             <View style={styles.userInfo}>
               <View style={styles.userNameRow}>
                 <Text style={styles.userName}>{item.user_name || '匿名ユーザー'}</Text>
+                {store?.name && (
+                  <View style={styles.placeBadge}>
+                    <Text style={styles.placeBadgeText} numberOfLines={1}>
+                      {store.name}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.statusBadge}>
                   <Text style={styles.statusBadgeText}>
                     {isRequesting ? 'リクエスト中' : '募集'}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.timeText}>200m • 5分前</Text>
+              <Text style={styles.timeText}>
+                200m • {item.created_at ? formatTimeAgo(item.created_at) : '不明'}
+              </Text>
             </View>
           </View>
           <TouchableOpacity style={styles.moreButton}>
-            <Text style={styles.moreButtonText}>⋮</Text>
+            <Ionicons name="ellipsis-vertical" size={20} color="#D95C14" />
           </TouchableOpacity>
         </View>
 
@@ -190,15 +213,17 @@ export default function TradeScreen() {
             </View>
             <View style={[styles.imageContainer, isRequesting && styles.dashedImageContainer]}>
               {item.photo_url ? (
-                <Image source={{ uri: item.photo_url }} style={styles.itemImage} />
+                <Image source={{ uri: item.photo_url }} style={styles.itemImage} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
-                <View style={styles.imagePlaceholder} />
+                <View style={styles.imagePlaceholder}>
+                  <Ionicons name="image-outline" size={30} color="#CCC" />
+                </View>
               )}
             </View>
           </View>
 
           <View style={styles.connectorArrow}>
-            <Text style={styles.arrowText}>⇄</Text>
+            <Ionicons name="swap-horizontal" size={16} color="#994700" />
           </View>
 
           <View style={styles.itemSection}>
@@ -211,7 +236,9 @@ export default function TradeScreen() {
               </View>
             </View>
             <View style={styles.imageContainer}>
-              <View style={styles.imagePlaceholder} />
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={30} color="#CCC" />
+              </View>
             </View>
           </View>
         </View>
@@ -238,7 +265,7 @@ export default function TradeScreen() {
         </View>
       </View>
     );
-  };
+  }, [requestedTradeIds, handleTradeAction]);
 
   if (loading) {
     return (
@@ -249,140 +276,46 @@ export default function TradeScreen() {
   }
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.container}>
-        <View style={styles.switchTabContainer}>
-          <TouchableOpacity
-            style={styles.inactiveTab}
-            onPress={() => router.push('/post')}
-          >
-            <Text style={styles.inactiveTabText}>在庫報告</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.activeTab}>
-            <Text style={styles.activeTabText}>トレード</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.searchBarContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="検索キーワードを入力..."
-            placeholderTextColor="#6B7280"
-            value={searchQuery}
-            onChangeText={handleSearch}
-          />
-          <TouchableOpacity style={styles.searchButton}>
-            <Text style={styles.searchButtonText}>検索</Text>
-          </TouchableOpacity>
-        </View>
-
-        <FlashList
-          data={searchQuery.trim() === '' ? trades : filteredTrades}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#FF7A00']}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <Text style={styles.emptyText}>
-                {errorMsg ? errorMsg : '該当するトレード募集がありません'}
-              </Text>
-            </View>
-          }
+    <View style={styles.container}>
+      <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+        <SearchBar
+          value={filterName || ''}
+          onPress={() => router.push({ pathname: '/search', params: { returnTo: 'post', activeTab: 'trade' } })}
+          onClear={() => router.setParams({ filterType: '', filterId: '', filterName: '' })}
         />
       </View>
+
+      <FlashList
+        data={filterType ? filteredTrades : trades}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF7A00']}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.centerContainer}>
+            <Text style={styles.emptyText}>
+              {errorMsg ? errorMsg : '該当するトレード募集がありません'}
+            </Text>
+          </View>
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    alignItems: 'center',
-  },
   container: {
     flex: 1,
     width: '100%',
-    maxWidth: 390,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  switchTabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#E8E8EA',
-    borderRadius: 9999,
-    padding: 4,
-    marginBottom: 16,
-    height: 40,
-  },
-  inactiveTab: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 9999,
-  },
-  inactiveTabText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#584235',
-  },
-  activeTab: {
-    flex: 1,
-    backgroundColor: '#FF7A00',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 9999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  activeTabText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#5C2800',
-  },
-  searchBarContainer: {
-    position: 'relative',
-    height: 48,
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
-  searchInput: {
-    height: 48,
-    backgroundColor: '#F3F3F6',
-    borderRadius: 9999,
-    paddingLeft: 16,
-    paddingRight: 70,
-    fontSize: 14,
-    color: '#1A1C1E',
-  },
-  searchButton: {
-    position: 'absolute',
-    right: 8,
-    width: 56,
-    height: 28,
-    backgroundColor: '#994700',
-    borderRadius: 9999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: 16,
     gap: 16,
   },
   centerContainer: {
@@ -415,12 +348,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 9999,
-    borderWidth: 2,
-    borderColor: 'rgba(153, 71, 0, 0.1)',
-    backgroundColor: '#EEEEF0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   userInfo: {
     justifyContent: 'center',
@@ -434,6 +371,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#1A1C1E',
+  },
+  placeBadge: {
+    backgroundColor: '#FFF4E5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    maxWidth: 120,
+  },
+  placeBadgeText: {
+    fontSize: 10,
+    color: '#D95C14',
+    fontWeight: '600',
   },
   statusBadge: {
     backgroundColor: '#EEEEF0',
@@ -529,12 +478,13 @@ const styles = StyleSheet.create({
   itemImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   imagePlaceholder: {
     width: '100%',
     height: '100%',
     backgroundColor: '#EEEEF0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   connectorArrow: {
     position: 'absolute',
