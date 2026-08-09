@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 
-import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { ReportItem } from './InventoryCard';
 
 type Props = {
@@ -36,7 +37,8 @@ export default function ReportDetailModal({ report, onClose }: Props) {
               <Image
                 source={{ uri: report.photo_url }}
                 style={{ width: '100%', height: '100%' }}
-                resizeMode="contain"
+                contentFit="contain"
+                cachePolicy="memory-disk"
               />
             ) : (
               <View style={[{ width: '100%', height: '100%', backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
@@ -48,7 +50,7 @@ export default function ReportDetailModal({ report, onClose }: Props) {
           <View style={styles.modalInfoBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
               {profile?.icon_image && profile.icon_image.startsWith('http') ? (
-                <Image source={{ uri: profile.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                <Image source={{ uri: profile.icon_image }} style={{ width: 36, height: 36, borderRadius: 18 }} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <Ionicons name="person-circle" size={40} color="#ccc" style={{ marginLeft: -2 }} />
               )}
