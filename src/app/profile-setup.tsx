@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { profileApi } from '@/features/profile/api/api';
 import { useProfileContext } from '@/features/profile/contexts/ProfileContext';
@@ -10,9 +11,11 @@ import {
   Alert,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,8 +25,10 @@ export default function ProfileSetupScreen() {
   const { setHasProfile } = useProfileContext();
   const router = useRouter();
   const [nickname, setNickname] = useState('');
+  const [selfIntrodution, setSelfIntrodution] = useState('');
   const [selectedIconKey, setSelectedIconKey] = useState(PROFILE_ICON_OPTIONS[0].key);
   const [loading, setLoading] = useState(false);
+  const [fetchingProfile, setFetchingProfile] = useState(true);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -41,6 +46,19 @@ export default function ProfileSetupScreen() {
   useEffect(() => {
     if (initialized && !session) {
       router.replace('/(auth)/login' as any);
+      return;
+    }
+
+    if (session?.user.id) {
+      profileApi.getProfileByUserId(session.user.id).then(({ data }) => {
+        if (data) {
+          const loadedNickname = data.nickname || '';
+          if (loadedNickname) setNickname(loadedNickname);
+          if (data.icon_image) setSelectedIconKey(data.icon_image);
+          if (data.self_introdution) setSelfIntrodution(data.self_introdution);
+        }
+        setFetchingProfile(false);
+      });
     }
   }, [initialized, router, session]);
 
@@ -77,6 +95,7 @@ export default function ProfileSetupScreen() {
       userId: session.user.id,
       nickname: trimmedNickname,
       iconImage: finalIconImage,
+      selfIntrodution: selfIntrodution.trim(),
     });
 
     setLoading(false);
@@ -87,10 +106,14 @@ export default function ProfileSetupScreen() {
     }
 
     setHasProfile(true);
-    router.replace('/' as any);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/profile' as any);
+    }
   };
 
-  if (!initialized || !session) {
+  if (!initialized || !session || fetchingProfile) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0a7ea4" />
@@ -100,9 +123,17 @@ export default function ProfileSetupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>プロフィールを設定</Text>
-        <Text style={styles.description}>ニックネームとアイコンを選んで、はじめてのプロフィールを作成します。</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
+          <View style={styles.headerRow}>
+            {router.canGoBack() && (
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="#D95C14" />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.title}>プロフィールを設定</Text>
+          </View>
+        <Text style={styles.description}>ニックネーム・アイコン・自己紹介を設定してプロフィールを充実させましょう。</Text>
 
         <View style={styles.previewContainer}>
           <Image source={getProfileIconSource(selectedIconKey)} style={styles.previewImage} />
@@ -117,6 +148,19 @@ export default function ProfileSetupScreen() {
             onChangeText={setNickname}
             placeholder="表示名を入力"
             placeholderTextColor="#94a3b8"
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>自己紹介</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={selfIntrodution}
+            onChangeText={setSelfIntrodution}
+            placeholder="ガチャガチャの好みやアピールポイントを入力..."
+            placeholderTextColor="#94a3b8"
+            multiline
+            numberOfLines={3}
           />
         </View>
 
@@ -163,9 +207,10 @@ export default function ProfileSetupScreen() {
             pressed && !loading && styles.saveButtonPressed,
             loading && styles.saveButtonDisabled,
           ]}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>保存して始める</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>保存する</Text>}
         </Pressable>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -173,9 +218,11 @@ export default function ProfileSetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
     backgroundColor: '#eef6fb',
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -193,6 +240,14 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
     elevation: 4,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   title: {
     fontSize: 28,
@@ -237,6 +292,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f8fafc',
     color: '#0f172a',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   iconGrid: {
     flexDirection: 'row',

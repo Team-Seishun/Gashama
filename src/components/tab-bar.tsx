@@ -34,9 +34,10 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
 
     fetchUnreadCount();
 
-    // リアルタイム更新のサブスクリプション
+    // リアルタイム更新のサブスクリプション (ユニークなチャンネル名を使用)
+    const channelName = `chat_unread_${session.user.id}_${Date.now()}`;
     const channel = supabase
-      .channel('public:chat_messages')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'chat_messages' },
