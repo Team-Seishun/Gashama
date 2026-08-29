@@ -1,5 +1,5 @@
 import SearchBar from '@/components/SearchBar';
-import { Profile, Store, formatTimeAgo } from '@/components/InventoryCard';
+import { Profile, ReportItem, Store, formatTimeAgo } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +9,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -53,6 +55,11 @@ export default function TradeList() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
 
+  // 提供アイテム選択モーダル用ステート
+  const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
+  const [myInventories, setMyInventories] = useState<ReportItem[]>([]);
+  const [isFetchingInventory, setIsFetchingInventory] = useState<boolean>(false);
+
   const fetchTrades = async () => {
     try {
       const { data: tradeData, error: tradeError } = await supabase
@@ -73,6 +80,30 @@ export default function TradeList() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  // 自分の投稿（在庫）を取得し、相手の希望アイテムと一致するか選ぶための候補にする
+  const fetchMyInventories = async () => {
+    setIsFetchingInventory(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*, gachapon_items(name)')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching my inventories:', error);
+      } else if (data) {
+        setMyInventories(data as unknown as ReportItem[]);
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+    } finally {
+      setIsFetchingInventory(false);
     }
   };
 
@@ -124,24 +155,44 @@ export default function TradeList() {
     fetchTrades();
   };
 
-  const handleTradeAction = useCallback(async (item: Trade) => {
+  const onApplyPress = useCallback(async (item: Trade) => {
     if (requestedTradeIds.has(item.id) || processingTradeId) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (item.user_id === user.id) {
+      Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+      return;
+    }
+
+    setSelectedTradeForApply(item);
+    fetchMyInventories();
+  }, [requestedTradeIds, processingTradeId]);
+
+  const handleConfirmApplyTrade = useCallback(async (trade: Trade, myItem: ReportItem) => {
+    const wantItemName = trade.item_want || '';
+    const myGachaponItem = Array.isArray(myItem.gachapon_items) ? myItem.gachapon_items[0] : myItem.gachapon_items;
+    const myItemName = myGachaponItem?.name || '';
+
+    // 相手が希望しているアイテムを自分の投稿が持っているか確認（部分一致）
+    if (wantItemName && (!myItemName || (!myItemName.includes(wantItemName) && !wantItemName.includes(myItemName)))) {
+      Alert.alert('エラー', `相手が希望しているアイテム（${wantItemName}）と一致しません。`);
+      return;
+    }
+
+    setSelectedTradeForApply(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      if (item.user_id === user.id) {
-        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
-        return;
-      }
-
-      setProcessingTradeId(item.id);
+      setProcessingTradeId(trade.id);
 
       const { error: requestError } = await supabase
         .from('trade_requests')
         .insert({
-          trade_id: item.id,
+          trade_id: trade.id,
           applicant_id: user.id,
           status: 0,
         });
@@ -150,15 +201,15 @@ export default function TradeList() {
       const { error: updateError } = await supabase
         .from('trades')
         .update({ status: 1 })
-        .eq('id', item.id);
+        .eq('id', trade.id);
       if (updateError) throw updateError;
 
       const { data: newRoom, error: roomError } = await supabase
         .from('chat_rooms')
         .insert({
-          trade_id: item.id,
+          trade_id: trade.id,
           user_1_id: user.id,
-          user_2_id: item.user_id,
+          user_2_id: trade.user_id,
           status: 'pending'
         })
         .select('id')
@@ -176,9 +227,9 @@ export default function TradeList() {
         });
       if (messageError) throw messageError;
 
-      setRequestedTradeIds((prev) => new Set(prev).add(item.id));
+      setRequestedTradeIds((prev) => new Set(prev).add(trade.id));
       setTrades((prev) =>
-        prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
+        prev.map((t) => (t.id === trade.id ? { ...t, is_requesting: true } : t))
       );
 
       router.push({
@@ -191,7 +242,7 @@ export default function TradeList() {
     } finally {
       setProcessingTradeId(null);
     }
-  }, [requestedTradeIds, processingTradeId, router]);
+  }, [router]);
 
   const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
@@ -294,7 +345,7 @@ export default function TradeList() {
           ) : (
             <TouchableOpacity
               style={[styles.tradeButton, isProcessing && styles.tradeButtonDisabled]}
-              onPress={() => handleTradeAction(item)}
+              onPress={() => onApplyPress(item)}
               disabled={isProcessing}
             >
               <Text style={styles.tradeButtonText}>
@@ -311,7 +362,7 @@ export default function TradeList() {
         </View>
       </View>
     );
-  }, [requestedTradeIds, processingTradeId, handleTradeAction]);
+  }, [requestedTradeIds, processingTradeId, onApplyPress]);
 
   if (loading) {
     return (
@@ -351,6 +402,56 @@ export default function TradeList() {
           </View>
         }
       />
+
+      {/* 提供アイテム選択モーダル：相手の希望と一致する自分の投稿を選ぶ */}
+      <Modal
+        visible={!!selectedTradeForApply}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedTradeForApply(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalCloseArea} onPress={() => setSelectedTradeForApply(null)} />
+          <View style={styles.modalContentWrapper}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>提供するアイテムを選択</Text>
+              <TouchableOpacity onPress={() => setSelectedTradeForApply(null)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              相手の希望: <Text style={styles.modalSubtitleHighlight}>{selectedTradeForApply?.item_want || 'なし'}</Text>
+            </Text>
+
+            {isFetchingInventory ? (
+              <ActivityIndicator size="large" color="#FF7A00" style={{ marginVertical: 32 }} />
+            ) : myInventories.length === 0 ? (
+              <Text style={styles.modalEmptyText}>提供できる在庫がありません。</Text>
+            ) : (
+              <ScrollView style={styles.inventoryList}>
+                {myInventories.map((inv) => {
+                  const invGachaponItem = Array.isArray(inv.gachapon_items) ? inv.gachapon_items[0] : inv.gachapon_items;
+                  return (
+                    <TouchableOpacity
+                      key={inv.id}
+                      style={styles.inventorySelectItem}
+                      onPress={() => selectedTradeForApply && handleConfirmApplyTrade(selectedTradeForApply, inv)}
+                    >
+                      <Image
+                        source={{ uri: inv.photo_url }}
+                        style={styles.inventorySelectItemImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                      />
+                      <Text style={styles.inventorySelectItemName}>{invGachaponItem?.name || '不明なアイテム'}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -597,5 +698,68 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#888888',
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalCloseArea: {
+    flex: 1,
+  },
+  modalContentWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1C1E',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#584235',
+    marginBottom: 16,
+  },
+  modalSubtitleHighlight: {
+    fontWeight: '700',
+    color: '#D95C14',
+  },
+  modalEmptyText: {
+    textAlign: 'center',
+    color: '#888888',
+    marginVertical: 20,
+  },
+  inventoryList: {
+    maxHeight: 400,
+  },
+  inventorySelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEF0',
+  },
+  inventorySelectItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#EEEEF0',
+  },
+  inventorySelectItemName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1C1E',
   },
 });
