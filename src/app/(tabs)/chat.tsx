@@ -60,7 +60,7 @@ const ChatListItem = memo(({ item, onPress }: { item: ChatRoomWithPartner, onPre
           <View style={styles.gachaponTag}>
             <Ionicons name="cube" size={12} color="#FF7A00" style={{ marginRight: 4 }} />
             <Text style={styles.gachaponName} numberOfLines={1}>
-              {Array.isArray(item.trade?.gachapons) ? item.trade?.gachapons[0]?.name : item.trade?.gachapons?.name || '不明'}
+              {(Array.isArray(item.trade?.gachapons) ? item.trade?.gachapons[0]?.name : item.trade?.gachapons?.name) || '不明'}
             </Text>
           </View>
           <Text style={{ color: '#E0E0E0', marginHorizontal: 6 }}>|</Text>
