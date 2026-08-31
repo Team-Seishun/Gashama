@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -54,6 +54,8 @@ export default function TradeList() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
+  // setProcessingTradeIdの反映(再レンダリング)を待たずに二重送信を同期的にブロックするためのロック
+  const processingTradeRef = useRef<string | null>(null);
 
   // 提供アイテム選択モーダル用ステート
   const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
@@ -171,6 +173,11 @@ export default function TradeList() {
   }, [requestedTradeIds, processingTradeId]);
 
   const handleConfirmApplyTrade = useCallback(async (trade: Trade, myItem: ReportItem) => {
+    // await をまたぐ前に同期的にロックし、連続タップによる二重送信を防ぐ
+    if (requestedTradeIds.has(trade.id) || processingTradeRef.current) return;
+    processingTradeRef.current = trade.id;
+    setProcessingTradeId(trade.id);
+
     const wantItemName = trade.item_want || '';
     const myGachaponItem = Array.isArray(myItem.gachapon_items) ? myItem.gachapon_items[0] : myItem.gachapon_items;
     const myItemName = myGachaponItem?.name || '';
@@ -178,6 +185,8 @@ export default function TradeList() {
     // 相手が希望しているアイテムを自分の投稿が持っているか確認（部分一致）
     if (wantItemName && (!myItemName || (!myItemName.includes(wantItemName) && !wantItemName.includes(myItemName)))) {
       Alert.alert('エラー', `相手が希望しているアイテム（${wantItemName}）と一致しません。`);
+      processingTradeRef.current = null;
+      setProcessingTradeId(null);
       return;
     }
 
@@ -186,8 +195,6 @@ export default function TradeList() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      setProcessingTradeId(trade.id);
 
       const { error: requestError } = await supabase
         .from('trade_requests')
@@ -240,9 +247,10 @@ export default function TradeList() {
       console.error('Failed to send trade request:', err);
       Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
     } finally {
+      processingTradeRef.current = null;
       setProcessingTradeId(null);
     }
-  }, [router]);
+  }, [requestedTradeIds, router]);
 
   const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
@@ -436,6 +444,7 @@ export default function TradeList() {
                       key={inv.id}
                       style={styles.inventorySelectItem}
                       onPress={() => selectedTradeForApply && handleConfirmApplyTrade(selectedTradeForApply, inv)}
+                      disabled={!!processingTradeId}
                     >
                       <Image
                         source={{ uri: inv.photo_url }}
