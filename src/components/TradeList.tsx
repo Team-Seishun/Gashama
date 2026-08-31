@@ -202,6 +202,7 @@ export default function TradeList() {
           trade_id: trade.id,
           applicant_id: user.id,
           status: 0,
+          offered_report_id: myItem.id,
         });
       if (requestError) throw requestError;
 
