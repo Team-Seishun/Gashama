@@ -201,6 +201,13 @@ export default function TradeList() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // onApplyPress開始からモーダル確定までの間にセッションが変わっている可能性があるため、
+      // 実際にDBへ書き込む直前にも自分の投稿への申請でないことを再検証する
+      if (trade.user_id === user.id) {
+        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+        return;
+      }
+
       const { error: requestError } = await supabase
         .from('trade_requests')
         .insert({
