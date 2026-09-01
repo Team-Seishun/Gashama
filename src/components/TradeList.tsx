@@ -436,10 +436,11 @@ export default function TradeList() {
                       disabled={!!processingTradeId}
                     >
                       <Image
-                        source={{ uri: inv.photo_url }}
+                        source={{ uri: inv.photo_url || 'https://via.placeholder.com/200' }}
                         style={styles.inventorySelectItemImage}
                         contentFit="cover"
                         cachePolicy="memory-disk"
+                        recyclingKey={inv.photo_url || inv.id}
                       />
                       <Text style={styles.inventorySelectItemName}>{invGachaponItem?.name || '不明なアイテム'}</Text>
                     </TouchableOpacity>
