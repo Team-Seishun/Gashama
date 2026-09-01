@@ -66,7 +66,7 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
+        .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -94,7 +94,7 @@ export default function TradeList() {
 
       const { data, error } = await supabase
         .from('reports')
-        .select('*, gachapon_items(name)')
+        .select('*, gachapon_items(id, name)')
         .eq('user_id', user.id);
 
       if (error) {
@@ -182,9 +182,14 @@ export default function TradeList() {
     const myGachaponItem = Array.isArray(myItem.gachapon_items) ? myItem.gachapon_items[0] : myItem.gachapon_items;
     const myItemName = myGachaponItem?.name || '';
 
-    // 相手が希望しているアイテムを自分の投稿が持っているか確認（部分一致）
-    if (wantItemName && (!myItemName || (!myItemName.includes(wantItemName) && !wantItemName.includes(myItemName)))) {
-      Alert.alert('エラー', `相手が希望しているアイテム（${wantItemName}）と一致しません。`);
+    // want_item_idがあればgachapon_items.idの完全一致で判定する（表示名の部分一致だと別アイテムが誤って一致してしまうため）。
+    // want_item_idがない古いデータのみ、フォールバックとして表示名の部分一致を使う。
+    const isMatch = trade.want_item_id
+      ? myGachaponItem?.id === trade.want_item_id
+      : !wantItemName || (!!myItemName && (myItemName.includes(wantItemName) || wantItemName.includes(myItemName)));
+
+    if (!isMatch) {
+      Alert.alert('エラー', `相手が希望しているアイテム（${wantItemName || '不明'}）と一致しません。`);
       processingTradeRef.current = null;
       setProcessingTradeId(null);
       return;
