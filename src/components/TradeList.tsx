@@ -157,7 +157,9 @@ export default function TradeList() {
   };
 
   const onApplyPress = useCallback(async (item: Trade) => {
-    if (requestedTradeIds.has(item.id) || processingTradeId) return;
+    // processingTradeIdはstateなので再レンダリング前は反映されない可能性がある。
+    // 同期的なprocessingTradeRefも合わせて見て、確定処理が進行中はモーダルを開かせない。
+    if (requestedTradeIds.has(item.id) || processingTradeId || processingTradeRef.current) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
