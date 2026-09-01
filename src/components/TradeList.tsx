@@ -400,7 +400,11 @@ export default function TradeList() {
         onRequestClose={() => setSelectedTradeForApply(null)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalCloseArea} onPress={() => setSelectedTradeForApply(null)} />
+          <TouchableOpacity
+            style={styles.modalCloseArea}
+            onPress={() => setSelectedTradeForApply(null)}
+            accessible={false}
+          />
           <View style={styles.modalContentWrapper}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>提供するアイテムを選択</Text>
