@@ -1,5 +1,5 @@
 import SearchBar from '@/components/SearchBar';
-import { Profile, ReportItem, Store, formatTimeAgo } from '@/components/InventoryCard';
+import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,16 +86,14 @@ export default function TradeList() {
   };
 
   // 自分の投稿（在庫）を取得し、相手の希望アイテムと一致するか選ぶための候補にする
-  const fetchMyInventories = async () => {
+  // userIdはonApplyPressで取得済みのものを受け取り、getUser()の重複呼び出しを避ける
+  const fetchMyInventories = async (userId: string) => {
     setIsFetchingInventory(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
         .from('reports')
         .select('*, gachapon_items(id, name)')
-        .eq('user_id', user.id);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('Error fetching my inventories:', error);
@@ -169,7 +167,7 @@ export default function TradeList() {
     }
 
     setSelectedTradeForApply(item);
-    fetchMyInventories();
+    fetchMyInventories(user.id);
   }, [requestedTradeIds, processingTradeId]);
 
   const handleConfirmApplyTrade = useCallback(async (trade: Trade, myItem: ReportItem) => {
@@ -179,7 +177,7 @@ export default function TradeList() {
     setProcessingTradeId(trade.id);
 
     const wantItemName = trade.item_want || '';
-    const myGachaponItem = Array.isArray(myItem.gachapon_items) ? myItem.gachapon_items[0] : myItem.gachapon_items;
+    const myGachaponItem = unwrapRelation(myItem.gachapon_items);
     const myItemName = myGachaponItem?.name || '';
 
     // want_item_idがあればgachapon_items.idの完全一致で判定する（表示名の部分一致だと別アイテムが誤って一致してしまうため）。
@@ -271,8 +269,8 @@ export default function TradeList() {
     const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
     const colorIndex = (item.user_name || '').length % colors.length;
     const userColor = colors[colorIndex];
-    const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
-    const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
+    const profile = unwrapRelation(item.profiles);
+    const store = unwrapRelation(item.stores);
 
     return (
       <View style={styles.card}>
@@ -451,7 +449,7 @@ export default function TradeList() {
             ) : (
               <ScrollView style={styles.inventoryList}>
                 {myInventories.map((inv) => {
-                  const invGachaponItem = Array.isArray(inv.gachapon_items) ? inv.gachapon_items[0] : inv.gachapon_items;
+                  const invGachaponItem = unwrapRelation(inv.gachapon_items);
                   return (
                     <TouchableOpacity
                       key={inv.id}

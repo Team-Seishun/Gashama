@@ -40,6 +40,10 @@ type InventoryCardProps = {
   item: ReportItem;
 };
 
+// Supabaseのjoin結果（単一オブジェクトまたは配列で返る）を単一オブジェクトに正規化する
+export const unwrapRelation = <T,>(value: T | T[] | null | undefined): T | undefined =>
+  Array.isArray(value) ? value[0] : value ?? undefined;
+
 // ステータス表示の変換ヘルパー
 export const getStockStatusInfo = (status: number) => {
   switch (status) {
@@ -64,10 +68,10 @@ export const formatTimeAgo = (dateString: string) => {
 };
 
 export const InventoryCard: React.FC<InventoryCardProps> = ({ item }) => {
-  const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
-  const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
-  const gachapon = Array.isArray(item.gachapons) ? item.gachapons[0] : item.gachapons;
-  const gachaponItem = Array.isArray(item.gachapon_items) ? item.gachapon_items[0] : item.gachapon_items;
+  const profile = unwrapRelation(item.profiles);
+  const store = unwrapRelation(item.stores);
+  const gachapon = unwrapRelation(item.gachapons);
+  const gachaponItem = unwrapRelation(item.gachapon_items);
 
   const statusInfo = getStockStatusInfo(item.stock_status);
   const itemName = gachaponItem?.name
