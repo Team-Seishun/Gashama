@@ -89,6 +89,7 @@ export default function TradeList() {
   // userIdはonApplyPressで取得済みのものを受け取り、getUser()の重複呼び出しを避ける
   const fetchMyInventories = async (userId: string) => {
     setIsFetchingInventory(true);
+    setMyInventories([]);
     try {
       const { data, error } = await supabase
         .from('reports')
