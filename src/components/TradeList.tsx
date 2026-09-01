@@ -408,7 +408,11 @@ export default function TradeList() {
           <View style={styles.modalContentWrapper}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>提供するアイテムを選択</Text>
-              <TouchableOpacity onPress={() => setSelectedTradeForApply(null)}>
+              <TouchableOpacity
+                onPress={() => setSelectedTradeForApply(null)}
+                accessibilityRole="button"
+                accessibilityLabel="閉じる"
+              >
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
