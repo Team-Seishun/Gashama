@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ItemType, useMasterData } from '../hooks/useMasterData';
 import { supabase } from '../utils/supabase';
 import SearchMasterView, { SearchMasterMode, SearchResult } from '@/components/search-master-view';
@@ -450,14 +450,19 @@ export default function ReportCreateScreen() {
       </ScrollView>
 
       {/* 選択モーダル (全画面検索) */}
+      {/* Modalはネイティブ側で別ウィンドウとして描画され、ルートのSafeAreaProviderの計測が
+          届かないため、SearchMasterView内のSafeAreaViewが正しくinsetsを取得できるよう
+          ここでSafeAreaProviderを入れ直す */}
       <Modal visible={modalType !== null} animationType="slide" transparent={false}>
-        {modalType && (
-          <SearchMasterView 
-            mode={modalType} 
-            onSelect={handleSelectSearchResult} 
-            onClose={() => setModalType(null)} 
-          />
-        )}
+        <SafeAreaProvider>
+          {modalType && (
+            <SearchMasterView
+              mode={modalType}
+              onSelect={handleSelectSearchResult}
+              onClose={() => setModalType(null)}
+            />
+          )}
+        </SafeAreaProvider>
       </Modal>
     </KeyboardAvoidingView>
     </SafeAreaView>
