@@ -199,54 +199,16 @@ export default function TradeList() {
     setSelectedTradeForApply(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // onApplyPress開始からモーダル確定までの間にセッションが変わっている可能性があるため、
-      // 実際にDBへ書き込む直前にも自分の投稿への申請でないことを再検証する
-      if (trade.user_id === user.id) {
-        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
-        return;
-      }
-
-      const { error: requestError } = await supabase
-        .from('trade_requests')
-        .insert({
-          trade_id: trade.id,
-          applicant_id: user.id,
-          status: 0,
-          offered_report_id: myItem.id,
-        });
-      if (requestError) throw requestError;
-
-      const { error: updateError } = await supabase
-        .from('trades')
-        .update({ status: 1 })
-        .eq('id', trade.id);
-      if (updateError) throw updateError;
-
-      const { data: newRoom, error: roomError } = await supabase
-        .from('chat_rooms')
-        .insert({
-          trade_id: trade.id,
-          user_1_id: user.id,
-          user_2_id: trade.user_id,
-          status: 'pending'
-        })
-        .select('id')
-        .single();
-      if (roomError) throw roomError;
-
-      const targetRoomId = newRoom.id;
-
-      const { error: messageError } = await supabase
-        .from('chat_messages')
-        .insert({
-          room_id: targetRoomId,
-          sender_id: user.id,
-          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
-        });
-      if (messageError) throw messageError;
+      // trade_requests・trades・chat_rooms・chat_messagesへの4つの書き込みは
+      // apply_trade_request RPC（Postgres関数）にまとめており、関数内で例外が
+      // 発生した場合は関数内の変更がすべてロールバックされるため、
+      // 「trade_requestsだけ作成されチャットルームが無い」といった不整合が起きない。
+      // 所有者チェックとauth.uid()の取得もRPC側（DB）で行われる。
+      const { data: targetRoomId, error: rpcError } = await supabase.rpc('apply_trade_request', {
+        p_trade_id: trade.id,
+        p_offered_report_id: myItem.id,
+      });
+      if (rpcError) throw rpcError;
 
       setRequestedTradeIds((prev) => new Set(prev).add(trade.id));
       setTrades((prev) =>
@@ -259,7 +221,12 @@ export default function TradeList() {
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
-      Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('cannot apply to own trade')) {
+        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+      } else {
+        Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
+      }
     } finally {
       processingTradeRef.current = null;
       setProcessingTradeId(null);
