@@ -224,6 +224,11 @@ export default function TradeList() {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('cannot apply to own trade')) {
         Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+      } else if (message.includes('trade already requested')) {
+        Alert.alert('エラー', 'このトレードは既に他のユーザーから申請されています');
+        fetchTrades();
+      } else if (message.includes('offered report must belong to the applicant')) {
+        Alert.alert('エラー', '選択したアイテムを確認できませんでした。もう一度お試しください');
       } else {
         Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
       }
