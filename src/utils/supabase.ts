@@ -23,8 +23,22 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // RNはバックグラウンド中にタイマーが止まるため、フォアグラウンド復帰時のみ
 // 自動更新を回す。これがないとバックグラウンド復帰直後にトークン更新が
 // 間に合わず、一時的にセッションがnullになることがある。
+//
+// このファイル自体は開発中のFast Refreshで再評価されることがあり、その
+// たびに素朴に addEventListener すると古いリスナーが解除されないまま
+// 積み重なってしまう。モジュールのローカル変数は再評価のたびにリセット
+// されるため、モジュールをまたいで生き続ける globalThis 側に購読を
+// 保持し、登録し直す前に必ず前回分を解除する。
+const appStateSubscriptionKey = '__supabaseAppStateSubscription';
+type AppStateSubscription = { remove: () => void };
+
 if (typeof window !== 'undefined') {
-  AppState.addEventListener('change', (state) => {
+  const globalWithSubscription = globalThis as typeof globalThis & {
+    [appStateSubscriptionKey]?: AppStateSubscription;
+  };
+
+  globalWithSubscription[appStateSubscriptionKey]?.remove();
+  globalWithSubscription[appStateSubscriptionKey] = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       supabase.auth.startAutoRefresh();
     } else {

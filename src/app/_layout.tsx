@@ -45,8 +45,14 @@ export default function TabLayout() {
     const fetchProfile = (retriesLeft: number) => {
       profileApi
         .getProfileByUserId(session.user.id)
-        .then(({ data }) => {
+        .then(({ data, error }) => {
           if (!isActive) return;
+          // getProfileByUserId は maybeSingle() を使っているため、通信/DBエラーでも
+          // Promiseはreject(catchに落ちる)せず、errorフィールド付きでresolveされる。
+          // catch節の再試行ロジックに合流させるため、ここで明示的にthrowする。
+          if (error) {
+            throw error;
+          }
           __DEV__ && console.log('[Layout] Profile API returned:', data);
           setProfileState({
             checked: true,
@@ -56,9 +62,8 @@ export default function TabLayout() {
         })
         .catch(() => {
           if (!isActive) return;
-          // Fetch failures (network blips, timeouts) are not the same as "no profile".
-          // Retry once before falling back, so a transient error doesn't force an
-          // already-onboarded user into the profile-setup flow.
+          // 取得失敗（通信エラー等）は「プロフィールが存在しない」とは別物。
+          // 1回だけ自動で再試行してから諦める。
           if (retriesLeft > 0) {
             fetchProfile(retriesLeft - 1);
             return;
@@ -100,9 +105,7 @@ export default function TabLayout() {
     }, 0);
 
     return () => clearTimeout(timeoutId);
-    // router is a stable expo-router singleton and doesn't need to be a dependency
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, initialized, segments, profileState]);
+  }, [session, initialized, segments, profileState, router]);
   const isReady = initialized && (!session || profileState.checked);
 
   useEffect(() => {
