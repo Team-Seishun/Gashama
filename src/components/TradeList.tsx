@@ -225,7 +225,13 @@ export default function TradeList() {
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
-      const message = err instanceof Error ? err.message : '';
+      // supabase.rpc()はthrowOnError()を使わない限り、エラーをErrorのインスタンスではなく
+      // { message, details, hint, code } を持つただのオブジェクトとして投げてくるため、
+      // instanceof Errorでは判定できない
+      const message =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : '';
       if (message.includes('cannot apply to own trade')) {
         Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
       } else if (message.includes('trade already requested')) {
