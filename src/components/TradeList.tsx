@@ -1,15 +1,17 @@
 import SearchBar from '@/components/SearchBar';
-import { Profile, Store, formatTimeAgo } from '@/components/InventoryCard';
+import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -52,12 +54,20 @@ export default function TradeList() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
+  // setProcessingTradeIdの反映(再レンダリング)を待たずに二重送信を同期的にブロックするためのロック
+  const processingTradeRef = useRef<string | null>(null);
+
+  // 提供アイテム選択モーダル用ステート
+  const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
+  const [myInventories, setMyInventories] = useState<ReportItem[]>([]);
+  const [isFetchingInventory, setIsFetchingInventory] = useState<boolean>(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   const fetchTrades = async () => {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, store_id, item_give, item_want, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
+        .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
       if (tradeError) {
@@ -73,6 +83,32 @@ export default function TradeList() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  // 自分の投稿（在庫）を取得し、相手の希望アイテムと一致するか選ぶための候補にする
+  // userIdはonApplyPressで取得済みのものを受け取り、getUser()の重複呼び出しを避ける
+  const fetchMyInventories = async (userId: string) => {
+    setIsFetchingInventory(true);
+    setMyInventories([]);
+    setInventoryError(null);
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*, gachapon_items(id, name)')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching my inventories:', error);
+        setInventoryError('在庫の取得に失敗しました。もう一度お試しください。');
+      } else if (data) {
+        setMyInventories(data as unknown as ReportItem[]);
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setInventoryError('在庫の取得に失敗しました。もう一度お試しください。');
+    } finally {
+      setIsFetchingInventory(false);
     }
   };
 
@@ -124,61 +160,63 @@ export default function TradeList() {
     fetchTrades();
   };
 
-  const handleTradeAction = useCallback(async (item: Trade) => {
-    if (requestedTradeIds.has(item.id) || processingTradeId) return;
+  const onApplyPress = useCallback(async (item: Trade) => {
+    // processingTradeIdはstateなので再レンダリング前は反映されない可能性がある。
+    // 同期的なprocessingTradeRefも合わせて見て、確定処理が進行中はモーダルを開かせない。
+    if (requestedTradeIds.has(item.id) || processingTradeId || processingTradeRef.current) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (item.user_id === user.id) {
+      Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+      return;
+    }
+
+    setSelectedTradeForApply(item);
+    fetchMyInventories(user.id);
+  }, [requestedTradeIds, processingTradeId]);
+
+  const handleConfirmApplyTrade = useCallback(async (trade: Trade, myItem: ReportItem) => {
+    // await をまたぐ前に同期的にロックし、連続タップによる二重送信を防ぐ
+    if (requestedTradeIds.has(trade.id) || processingTradeRef.current) return;
+    processingTradeRef.current = trade.id;
+    setProcessingTradeId(trade.id);
+
+    const wantItemName = trade.item_want || '';
+    const myGachaponItem = unwrapRelation(myItem.gachapon_items);
+    const myItemName = myGachaponItem?.name || '';
+
+    // want_item_idがあればgachapon_items.idの完全一致で判定する（表示名の部分一致だと別アイテムが誤って一致してしまうため）。
+    // want_item_idがない古いデータのみ、フォールバックとして表示名の部分一致を使う。
+    const isMatch = trade.want_item_id
+      ? myGachaponItem?.id === trade.want_item_id
+      : !wantItemName || (!!myItemName && (myItemName.includes(wantItemName) || wantItemName.includes(myItemName)));
+
+    if (!isMatch) {
+      Alert.alert('エラー', `相手が希望しているアイテム（${wantItemName || '不明'}）と一致しません。`);
+      processingTradeRef.current = null;
+      setProcessingTradeId(null);
+      return;
+    }
+
+    setSelectedTradeForApply(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // trade_requests・trades・chat_rooms・chat_messagesへの4つの書き込みは
+      // apply_trade_request RPC（Postgres関数）にまとめており、関数内で例外が
+      // 発生した場合は関数内の変更がすべてロールバックされるため、
+      // 「trade_requestsだけ作成されチャットルームが無い」といった不整合が起きない。
+      // 所有者チェックとauth.uid()の取得もRPC側（DB）で行われる。
+      const { data: targetRoomId, error: rpcError } = await supabase.rpc('apply_trade_request', {
+        p_trade_id: trade.id,
+        p_offered_report_id: myItem.id,
+      });
+      if (rpcError) throw rpcError;
 
-      if (item.user_id === user.id) {
-        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
-        return;
-      }
-
-      setProcessingTradeId(item.id);
-
-      const { error: requestError } = await supabase
-        .from('trade_requests')
-        .insert({
-          trade_id: item.id,
-          applicant_id: user.id,
-          status: 0,
-        });
-      if (requestError) throw requestError;
-
-      const { error: updateError } = await supabase
-        .from('trades')
-        .update({ status: 1 })
-        .eq('id', item.id);
-      if (updateError) throw updateError;
-
-      const { data: newRoom, error: roomError } = await supabase
-        .from('chat_rooms')
-        .insert({
-          trade_id: item.id,
-          user_1_id: user.id,
-          user_2_id: item.user_id,
-          status: 'pending'
-        })
-        .select('id')
-        .single();
-      if (roomError) throw roomError;
-
-      const targetRoomId = newRoom.id;
-
-      const { error: messageError } = await supabase
-        .from('chat_messages')
-        .insert({
-          room_id: targetRoomId,
-          sender_id: user.id,
-          message: '【システムメッセージ】\n交換申請を送りました。相手の承認をお待ちください。'
-        });
-      if (messageError) throw messageError;
-
-      setRequestedTradeIds((prev) => new Set(prev).add(item.id));
+      setRequestedTradeIds((prev) => new Set(prev).add(trade.id));
       setTrades((prev) =>
-        prev.map((t) => (t.id === item.id ? { ...t, is_requesting: true } : t))
+        prev.map((t) => (t.id === trade.id ? { ...t, is_requesting: true } : t))
       );
 
       router.push({
@@ -187,11 +225,28 @@ export default function TradeList() {
       });
     } catch (err) {
       console.error('Failed to send trade request:', err);
-      Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
+      // supabase.rpc()はthrowOnError()を使わない限り、エラーをErrorのインスタンスではなく
+      // { message, details, hint, code } を持つただのオブジェクトとして投げてくるため、
+      // instanceof Errorでは判定できない
+      const message =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : '';
+      if (message.includes('cannot apply to own trade')) {
+        Alert.alert('エラー', '自分の投稿にはトレードを提案できません');
+      } else if (message.includes('trade already requested')) {
+        Alert.alert('エラー', 'このトレードは既に他のユーザーから申請されています');
+        fetchTrades();
+      } else if (message.includes('offered report must belong to the applicant')) {
+        Alert.alert('エラー', '選択したアイテムを確認できませんでした。もう一度お試しください');
+      } else {
+        Alert.alert('エラー', 'トレードリクエストの送信に失敗しました');
+      }
     } finally {
+      processingTradeRef.current = null;
       setProcessingTradeId(null);
     }
-  }, [requestedTradeIds, processingTradeId, router]);
+  }, [requestedTradeIds, router]);
 
   const renderItem = useCallback(({ item }: { item: Trade }) => {
     const isRequesting = requestedTradeIds.has(item.id) || item.is_requesting;
@@ -199,8 +254,8 @@ export default function TradeList() {
     const colors = ['#E1F5FE', '#FCE4EC', '#E8F5E9', '#FFF3E0', '#F3E5F5'];
     const colorIndex = (item.user_name || '').length % colors.length;
     const userColor = colors[colorIndex];
-    const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
-    const store = Array.isArray(item.stores) ? item.stores[0] : item.stores;
+    const profile = unwrapRelation(item.profiles);
+    const store = unwrapRelation(item.stores);
 
     return (
       <View style={styles.card}>
@@ -294,7 +349,7 @@ export default function TradeList() {
           ) : (
             <TouchableOpacity
               style={[styles.tradeButton, isProcessing && styles.tradeButtonDisabled]}
-              onPress={() => handleTradeAction(item)}
+              onPress={() => onApplyPress(item)}
               disabled={isProcessing}
             >
               <Text style={styles.tradeButtonText}>
@@ -311,7 +366,7 @@ export default function TradeList() {
         </View>
       </View>
     );
-  }, [requestedTradeIds, processingTradeId, handleTradeAction]);
+  }, [requestedTradeIds, processingTradeId, onApplyPress]);
 
   if (loading) {
     return (
@@ -351,6 +406,68 @@ export default function TradeList() {
           </View>
         }
       />
+
+      {/* 提供アイテム選択モーダル：相手の希望と一致する自分の投稿を選ぶ */}
+      <Modal
+        visible={!!selectedTradeForApply}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedTradeForApply(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalCloseArea}
+            onPress={() => setSelectedTradeForApply(null)}
+            accessible={false}
+          />
+          <View style={styles.modalContentWrapper}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>提供するアイテムを選択</Text>
+              <TouchableOpacity
+                onPress={() => setSelectedTradeForApply(null)}
+                accessibilityRole="button"
+                accessibilityLabel="閉じる"
+              >
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              相手の希望: <Text style={styles.modalSubtitleHighlight}>{selectedTradeForApply?.item_want || 'なし'}</Text>
+            </Text>
+
+            {isFetchingInventory ? (
+              <ActivityIndicator size="large" color="#FF7A00" style={{ marginVertical: 32 }} />
+            ) : inventoryError ? (
+              <Text style={styles.modalEmptyText}>{inventoryError}</Text>
+            ) : myInventories.length === 0 ? (
+              <Text style={styles.modalEmptyText}>提供できる在庫がありません。</Text>
+            ) : (
+              <ScrollView style={styles.inventoryList}>
+                {myInventories.map((inv) => {
+                  const invGachaponItem = unwrapRelation(inv.gachapon_items);
+                  return (
+                    <TouchableOpacity
+                      key={inv.id}
+                      style={styles.inventorySelectItem}
+                      onPress={() => selectedTradeForApply && handleConfirmApplyTrade(selectedTradeForApply, inv)}
+                      disabled={!!processingTradeId}
+                    >
+                      <Image
+                        source={{ uri: inv.photo_url || 'https://via.placeholder.com/200' }}
+                        style={styles.inventorySelectItemImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        recyclingKey={inv.photo_url || inv.id}
+                      />
+                      <Text style={styles.inventorySelectItemName}>{invGachaponItem?.name || '不明なアイテム'}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -597,5 +714,68 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#888888',
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalCloseArea: {
+    flex: 1,
+  },
+  modalContentWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1C1E',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#584235',
+    marginBottom: 16,
+  },
+  modalSubtitleHighlight: {
+    fontWeight: '700',
+    color: '#D95C14',
+  },
+  modalEmptyText: {
+    textAlign: 'center',
+    color: '#888888',
+    marginVertical: 20,
+  },
+  inventoryList: {
+    maxHeight: 400,
+  },
+  inventorySelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEF0',
+  },
+  inventorySelectItemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#EEEEF0',
+  },
+  inventorySelectItemName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1C1E',
   },
 });
