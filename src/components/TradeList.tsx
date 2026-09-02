@@ -61,6 +61,7 @@ export default function TradeList() {
   const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
   const [myInventories, setMyInventories] = useState<ReportItem[]>([]);
   const [isFetchingInventory, setIsFetchingInventory] = useState<boolean>(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   const fetchTrades = async () => {
     try {
@@ -90,6 +91,7 @@ export default function TradeList() {
   const fetchMyInventories = async (userId: string) => {
     setIsFetchingInventory(true);
     setMyInventories([]);
+    setInventoryError(null);
     try {
       const { data, error } = await supabase
         .from('reports')
@@ -98,11 +100,13 @@ export default function TradeList() {
 
       if (error) {
         console.error('Error fetching my inventories:', error);
+        setInventoryError('在庫の取得に失敗しました。もう一度お試しください。');
       } else if (data) {
         setMyInventories(data as unknown as ReportItem[]);
       }
     } catch (err) {
       console.error('Unexpected error:', err);
+      setInventoryError('在庫の取得に失敗しました。もう一度お試しください。');
     } finally {
       setIsFetchingInventory(false);
     }
@@ -427,6 +431,8 @@ export default function TradeList() {
 
             {isFetchingInventory ? (
               <ActivityIndicator size="large" color="#FF7A00" style={{ marginVertical: 32 }} />
+            ) : inventoryError ? (
+              <Text style={styles.modalEmptyText}>{inventoryError}</Text>
             ) : myInventories.length === 0 ? (
               <Text style={styles.modalEmptyText}>提供できる在庫がありません。</Text>
             ) : (
