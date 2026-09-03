@@ -255,11 +255,9 @@ const styles = StyleSheet.create({
 
   // 検索
   searchSection: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F5F5F5',
     paddingHorizontal: 20,
     paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
 
   // リスト
