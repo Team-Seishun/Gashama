@@ -10,6 +10,20 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY');
 }
 
+// 開発中のFast Refreshでこのファイルが再評価されると createClient() が
+// 新しいクライアントを作り直す。古いクライアントを破棄せずに置き換えると、
+// 旧クライアントのバックグラウンド自動更新処理が残ったまま動き続けてしまう
+// ため、globalThis に前回のクライアントを保持しておき、作り直す前に
+// 必ず dispose() して後片付けする。
+const previousClientKey = '__supabaseClient';
+type DisposableSupabaseClient = { auth: { dispose: () => Promise<void> } };
+type GlobalWithSupabaseClient = typeof globalThis & {
+  [previousClientKey]?: DisposableSupabaseClient;
+};
+
+const globalWithSupabaseClient = globalThis as GlobalWithSupabaseClient;
+void globalWithSupabaseClient[previousClientKey]?.auth.dispose();
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // windowが存在する環境（ブラウザ）のみAsyncStorageを使用する設定に変更
@@ -19,6 +33,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
 });
+
+globalWithSupabaseClient[previousClientKey] = supabase;
 
 // RNはバックグラウンド中にタイマーが止まるため、フォアグラウンド復帰時のみ
 // 自動更新を回す。これがないとバックグラウンド復帰直後にトークン更新が
