@@ -38,7 +38,8 @@ create table if not exists public.points_ledger (
   report_id uuid references public.reports(id) on delete set null,
   store_id uuid not null references public.stores(id) on delete cascade,
   gachapon_id uuid not null references public.gachapons(id) on delete cascade,
-  points_awarded integer not null check (points_awarded >= 0),
+  points_awarded integer not null
+    constraint points_ledger_points_awarded_non_negative check (points_awarded >= 0),
   awarded_date date not null,
   created_at timestamptz not null default now()
 );
@@ -80,6 +81,13 @@ create policy "points_ledger_select_own"
 -- （実際にhas_column_privilege等で確認済み: authenticated/anonは元々profiles/tradesの
 -- テーブル単位UPDATEを持っていた）。そのためテーブル単位のINSERT/UPDATE権限を一旦revokeし、
 -- points/points_usedを除いた列だけを明示的に列単位でgrantし直す。
+--
+-- 【今後profiles/tradesに列を追加する人向けの申し送り】
+-- この2テーブルはもうテーブル単位のINSERT/UPDATE権限を持たない。クライアントから
+-- 書き込ませたい列を新たに追加した場合、以下のgrant文にその列名を追記しない限り、
+-- 列は存在するのに書き込めない（サイレントに弾かれる）状態になるので注意すること。
+-- また各grant文のinsert(...)とupdate(...)の列リストは意図的に同じ内容にしている。
+-- 個別に増減させたい列ができない限り、2つのリストは常に同期させること。
 revoke insert, update on public.profiles from authenticated, anon;
 revoke insert, update on public.trades from authenticated, anon;
 
