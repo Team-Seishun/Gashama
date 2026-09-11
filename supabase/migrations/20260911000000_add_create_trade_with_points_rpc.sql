@@ -33,9 +33,13 @@ begin
   end if;
 
   -- コストの低い定数チェック（DBアクセスなし）を先に行い、無効な入力のために
-  -- 不要なクエリや行ロックを取らない
+  -- 不要なクエリや行ロックを取らない。
+  -- p_points_used < 1 は「残高が足りない」のではなく「送られてきた値自体が不正」
+  -- という別の原因なので、insufficient pointsとは別のメッセージにする
+  -- （どちらも通常のステッパーUI操作では発生しない想定だが、原因が異なる以上
+  -- 同じ文言で握りつぶすと将来の調査を誤誘導しかねないため）。
   if p_points_used < 1 then
-    raise exception 'insufficient points';
+    raise exception 'invalid points amount';
   end if;
 
   if p_points_used > 20 then
@@ -51,6 +55,17 @@ begin
     ) then
       raise exception 'report does not belong to the caller';
     end if;
+  end if;
+
+  -- have_item_id/want_item_idはtradesの外部キー制約で守られてはいるが、
+  -- 違反時は生のFK違反エラーがそのままクライアントに渡ってしまう。
+  -- report_idと同じ水準で、存在しないIDなら分かりやすいメッセージで弾く
+  if not exists (select 1 from public.gachapon_items where id = p_have_item_id) then
+    raise exception 'have item not found';
+  end if;
+
+  if not exists (select 1 from public.gachapon_items where id = p_want_item_id) then
+    raise exception 'want item not found';
   end if;
 
   select points into v_current_points
