@@ -38,7 +38,10 @@ begin
   -- という別の原因なので、insufficient pointsとは別のメッセージにする
   -- （どちらも通常のステッパーUI操作では発生しない想定だが、原因が異なる以上
   -- 同じ文言で握りつぶすと将来の調査を誤誘導しかねないため）。
-  if p_points_used < 1 then
+  -- NULLとの比較は真にならないため is null を明示的に含めないとすり抜け、
+  -- points - NULL によって profiles.points の NOT NULL 制約違反という
+  -- 生のDBエラーに落ちてしまう（実DBで確認済み）。
+  if p_points_used is null or p_points_used < 1 then
     raise exception 'invalid points amount';
   end if;
 
