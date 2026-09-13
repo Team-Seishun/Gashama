@@ -206,8 +206,25 @@ export default function ReportCreateScreen() {
         throw new Error(`DB保存失敗: ${dbError.message}`);
       }
 
+      // ポイント付与。失敗してもレポート投稿自体は成功扱いのまま続ける
+      // （ポイントはおまけの仕組みであり、この処理のエラーで投稿全体を
+      // 失敗扱いにするとユーザー体験を損なうため）。
+      const { data: pointsAwarded, error: pointsError } = await supabase.rpc('award_report_points', {
+        p_report_id: reportData.id,
+      });
+      if (pointsError) {
+        console.error('ポイント付与エラー:', pointsError);
+      }
+      // RPC呼び出し自体が失敗した場合はpointsAwardedがundefinedになるため、
+      // 10/0どちらでもない場合はポイント関連の文言を一切追加しない
+      // （「獲得済みです」という事実と異なるメッセージを出さないため）。
+      const pointsMessage =
+        pointsAwarded === 10 ? '\n+10pt獲得しました！' :
+        pointsAwarded === 0 ? '\n本日はこの店舗・ガチャガチャで獲得済みです。' :
+        '';
+
       if (isCreatingTrade) {
-        Alert.alert('投稿完了', 'レポートを投稿しました！続けてトレード募集を作成します。', [
+        Alert.alert('投稿完了', `レポートを投稿しました！続けてトレード募集を作成します。${pointsMessage}`, [
           {
             text: 'OK',
             onPress: () => {
@@ -225,7 +242,7 @@ export default function ReportCreateScreen() {
           },
         ]);
       } else {
-        Alert.alert('投稿完了', 'レポートを投稿してトレードが解禁されました！', [
+        Alert.alert('投稿完了', `レポートを投稿してトレードが解禁されました！${pointsMessage}`, [
           {
             text: 'OK',
             onPress: () => router.replace('/post'),
