@@ -216,10 +216,13 @@ export default function ReportCreateScreen() {
         console.error('ポイント付与エラー:', pointsError);
       }
       // RPC呼び出し自体が失敗した場合はpointsAwardedがundefinedになるため、
-      // 10/0どちらでもない場合はポイント関連の文言を一切追加しない
+      // 正の数/0どちらでもない場合はポイント関連の文言を一切追加しない
       // （「獲得済みです」という事実と異なるメッセージを出さないため）。
+      // 獲得pt数は award_report_points の戻り値をそのまま表示に使い、
+      // "10"をクライアント側にハードコードしない（RPC側の付与量が
+      // 将来変わっても表示がズレないようにするため）。
       const pointsMessage =
-        pointsAwarded === 10 ? '\n+10pt獲得しました！' :
+        typeof pointsAwarded === 'number' && pointsAwarded > 0 ? `\n+${pointsAwarded}pt獲得しました！` :
         pointsAwarded === 0 ? '\n本日はこの店舗・ガチャガチャで獲得済みです。' :
         '';
 
