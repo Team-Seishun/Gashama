@@ -49,11 +49,39 @@ export default function TradeCreateScreen() {
 
   const [items, setItems] = useState<ItemType[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
-  
+
   const [haveItem, setHaveItem] = useState<ItemType | null>(null);
   const [wantItem, setWantItem] = useState<ItemType | null>(null);
-  
+
   const [loading, setLoading] = useState(false);
+
+  const [nickname, setNickname] = useState('');
+  // nullは「未取得」を表す。0(残高0pt)と区別するため、初期値をnullにしている。
+  const [pointsBalance, setPointsBalance] = useState<number | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        setLoadingProfile(false);
+        return;
+      }
+      supabase
+        .from('profiles')
+        .select('nickname, points')
+        .eq('id', user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error('プロフィール取得エラー:', error);
+          } else if (data) {
+            setNickname(data.nickname ?? '');
+            setPointsBalance(data.points ?? 0);
+          }
+          setLoadingProfile(false);
+        });
+    });
+  }, []);
 
   useEffect(() => {
     if (!gachaponId) {
@@ -98,13 +126,8 @@ export default function TradeCreateScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('ログイン状態が確認できません。再度ログインしてください。');
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('nickname')
-        .eq('id', user.id)
-        .single();
-
-      const userName = profile?.nickname || '匿名ユーザー';
+      // nicknameはマウント時に取得済みの値を再利用する（同じデータの二重取得を避ける）
+      const userName = nickname || '匿名ユーザー';
 
       const { error: dbError } = await supabase.from('trades').insert({
         user_id: user.id,
@@ -150,6 +173,16 @@ export default function TradeCreateScreen() {
         <Text style={styles.pageDescription}>
           在庫報告のアイテムから、トレードに出すアイテムと欲しいアイテムを選択してください。
         </Text>
+
+        <View style={styles.pointsBalanceRow}>
+          {loadingProfile ? (
+            <ActivityIndicator size="small" color="#FF7A00" />
+          ) : (
+            <Text style={styles.pointsBalanceText}>
+              保有ポイント: {pointsBalance ?? 0}pt
+            </Text>
+          )}
+        </View>
 
         {photoUrl && (
           <View style={styles.imageContainer}>
@@ -268,6 +301,14 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 20,
     lineHeight: 20,
+  },
+  pointsBalanceRow: {
+    marginBottom: 16,
+  },
+  pointsBalanceText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
   },
   imageContainer: {
     height: 140,
