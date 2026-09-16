@@ -15,6 +15,7 @@ export type ProfileRecord = {
   evaluate_star?: number | null;
   trade_history?: number | null;
   contribution_level?: number | null;
+  points?: number | null;
 };
 
 export const profileApi = {

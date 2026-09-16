@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { profileApi } from '@/features/profile/api/api';
 import { supabase } from '../utils/supabase';
 
 type ItemType = {
@@ -61,26 +62,35 @@ export default function TradeCreateScreen() {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // 画面を離れた後に非同期処理が完了してもsetStateしないためのガード
+    let cancelled = false;
+
+    (async () => {
+      // 表示専用の読み取りなので、ネットワーク往復を伴うgetUser()ではなく
+      // ローカルセッションを読むだけのgetSession()を使う（実際の書き込み直前の
+      // 認証検証はhandleSubmit内のgetUser()が別途行う）。
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
-        setLoadingProfile(false);
+        if (!cancelled) setLoadingProfile(false);
         return;
       }
-      supabase
-        .from('profiles')
-        .select('nickname, points')
-        .eq('id', user.id)
-        .single()
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('プロフィール取得エラー:', error);
-          } else if (data) {
-            setNickname(data.nickname ?? '');
-            setPointsBalance(data.points ?? 0);
-          }
-          setLoadingProfile(false);
-        });
-    });
+
+      const { data, error } = await profileApi.getProfileByUserId(user.id);
+      if (cancelled) return;
+
+      if (error) {
+        console.error('プロフィール取得エラー:', error);
+      } else if (data) {
+        setNickname(data.nickname ?? '');
+        setPointsBalance(data.points ?? 0);
+      }
+      setLoadingProfile(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
