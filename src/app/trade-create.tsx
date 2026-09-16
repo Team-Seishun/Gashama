@@ -107,6 +107,10 @@ export default function TradeCreateScreen() {
   }, [gachaponId, paramHaveItemId]);
 
   const handleSubmit = async () => {
+    if (loadingProfile) {
+      Alert.alert('読み込み中です', 'プロフィール情報を読み込み中です。少し待ってから再度お試しください。');
+      return;
+    }
     if (!haveItem) {
       Alert.alert('入力エラー', '譲るアイテム（出）を選択してください。');
       return;
@@ -177,9 +181,13 @@ export default function TradeCreateScreen() {
         <View style={styles.pointsBalanceRow}>
           {loadingProfile ? (
             <ActivityIndicator size="small" color="#FF7A00" />
+          ) : pointsBalance === null ? (
+            // 取得失敗時は0ptと区別し、その旨を明示する
+            // （残高0のユーザーと誤解されないようにするため）
+            <Text style={styles.pointsBalanceText}>保有ポイントを取得できませんでした</Text>
           ) : (
             <Text style={styles.pointsBalanceText}>
-              保有ポイント: {pointsBalance ?? 0}pt
+              保有ポイント: {pointsBalance}pt
             </Text>
           )}
         </View>
@@ -270,7 +278,7 @@ export default function TradeCreateScreen() {
         </View>
 
         <View style={styles.submitArea}>
-          {loading ? (
+          {loading || loadingProfile ? (
             <ActivityIndicator size="large" color="#FF6F00" />
           ) : (
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
