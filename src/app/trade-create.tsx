@@ -63,6 +63,18 @@ export default function TradeCreateScreen() {
   // nullは「未取得」を表す。0(残高0pt)と区別するため、初期値をnullにしている。
   const [pointsBalance, setPointsBalance] = useState<number | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  // 未ログインでpointsBalanceがnullのままのケースを、取得失敗によるnullと区別するためのフラグ。
+  // 未ログイン時はポイント不足ではなく認証エラーとして扱いたいため、送信ボタンの無効化条件から除外する
+  // （handleSubmit内の`ログイン状態が確認できません`エラーへ到達できるようにするため）。
+  const [isLoggedOut, setIsLoggedOut] = useState(false);
+  // 1トレードあたりの消費ポイント上限（create_trade_with_points RPC側の固定値と一致させる）
+  const POINTS_PER_TRADE_LIMIT = 20;
+  // null/0のいずれも「ステッパーを無効化する」対象（表示文言のみ原因別に分ける）
+  const isPointsUnavailable = pointsBalance === null || pointsBalance === 0;
+  // 送信ボタンは、未ログインの場合はhandleSubmit側の認証エラーに委ねるため無効化しない
+  const isSubmitBlockedByPoints = isPointsUnavailable && !isLoggedOut;
+  const maxPointsUsed = pointsBalance === null ? 0 : Math.min(pointsBalance, POINTS_PER_TRADE_LIMIT);
+  const [pointsUsed, setPointsUsed] = useState(1);
 
   useEffect(() => {
     // 画面を離れた後に非同期処理が完了してもsetStateしないためのガード
@@ -75,7 +87,10 @@ export default function TradeCreateScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (!user) {
-        if (!cancelled) setLoadingProfile(false);
+        if (!cancelled) {
+          setIsLoggedOut(true);
+          setLoadingProfile(false);
+        }
         return;
       }
 
@@ -119,6 +134,17 @@ export default function TradeCreateScreen() {
         setLoadingItems(false);
       });
   }, [gachaponId, paramHaveItemId]);
+
+  const isDecrementDisabled = isPointsUnavailable || pointsUsed <= 1;
+  const isIncrementDisabled = isPointsUnavailable || pointsUsed >= maxPointsUsed;
+
+  const decrementPointsUsed = () => {
+    setPointsUsed(prev => Math.max(1, prev - 1));
+  };
+
+  const incrementPointsUsed = () => {
+    setPointsUsed(prev => Math.min(maxPointsUsed, prev + 1));
+  };
 
   const handleSubmit = async () => {
     if (loadingProfile) {
@@ -213,6 +239,38 @@ export default function TradeCreateScreen() {
           )}
         </View>
 
+        {!loadingProfile && pointsBalance === 0 && (
+          <Text style={styles.pointsInsufficientText}>
+            ポイントが不足しています。在庫投稿でポイントを獲得してください。
+          </Text>
+        )}
+
+        <View style={styles.formCard}>
+          <View style={styles.fieldHeader}>
+            <Text style={styles.fieldTitle}>消費ポイント</Text>
+          </View>
+          <Text style={styles.fieldDescription}>
+            このトレード募集に使用するポイント数を選択してください。
+          </Text>
+          <View style={styles.stepperRow}>
+            <TouchableOpacity
+              style={[styles.stepperButton, isDecrementDisabled && styles.stepperButtonDisabled]}
+              onPress={decrementPointsUsed}
+              disabled={isDecrementDisabled}
+            >
+              <Ionicons name="remove" size={20} color={isDecrementDisabled ? '#CCC' : '#FF6F00'} />
+            </TouchableOpacity>
+            <Text style={styles.stepperValue}>{isPointsUnavailable ? 0 : pointsUsed}pt</Text>
+            <TouchableOpacity
+              style={[styles.stepperButton, isIncrementDisabled && styles.stepperButtonDisabled]}
+              onPress={incrementPointsUsed}
+              disabled={isIncrementDisabled}
+            >
+              <Ionicons name="add" size={20} color={isIncrementDisabled ? '#CCC' : '#FF6F00'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {photoUrl && (
           <View style={styles.imageContainer}>
             <Image source={{ uri: photoUrl }} style={styles.uploadedImage} resizeMode="cover" />
@@ -302,7 +360,11 @@ export default function TradeCreateScreen() {
           {loading || loadingProfile ? (
             <ActivityIndicator size="large" color="#FF6F00" />
           ) : (
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitBlockedByPoints && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitBlockedByPoints}
+            >
               <Ionicons name="swap-horizontal" size={20} color="#FFF" style={{ marginRight: 8 }} />
               <Text style={styles.submitButtonText}>トレードを募集する</Text>
             </TouchableOpacity>
@@ -338,6 +400,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#333',
+  },
+  pointsInsufficientText: {
+    fontSize: 13,
+    color: '#D32F2F',
+    marginBottom: 16,
+  },
+  fieldDescription: {
+    fontSize: 12,
+    color: '#777',
+    marginBottom: 12,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  stepperButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FF6F00',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepperButtonDisabled: {
+    backgroundColor: '#F9F9F9',
+    opacity: 0.5,
+  },
+  stepperValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    minWidth: 60,
+    textAlign: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#CCC',
+    opacity: 0.5,
   },
   imageContainer: {
     height: 140,
