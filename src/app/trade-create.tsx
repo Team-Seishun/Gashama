@@ -57,6 +57,9 @@ export default function TradeCreateScreen() {
   const [loading, setLoading] = useState(false);
 
   const [nickname, setNickname] = useState('');
+  // マウント時にnicknameを取得した相手のuser_id。送信時のuser.idと突き合わせ、
+  // アカウント切り替え等で別人のnicknameを誤って使わないようにするためのガード。
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   // nullは「未取得」を表す。0(残高0pt)と区別するため、初期値をnullにしている。
   const [pointsBalance, setPointsBalance] = useState<number | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -84,6 +87,7 @@ export default function TradeCreateScreen() {
       } else if (data) {
         setNickname(data.nickname ?? '');
         setPointsBalance(data.points ?? 0);
+        setProfileUserId(user.id);
       }
       setLoadingProfile(false);
     })();
@@ -139,6 +143,13 @@ export default function TradeCreateScreen() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('ログイン状態が確認できません。再度ログインしてください。');
+
+      // マウント時に取得したnicknameが今送信しようとしている本人のものか確認する。
+      // 画面を開いたままアカウントが切り替わっていた場合、別人のnicknameを
+      // 誤って使ってしまうことを防ぐ。
+      if (user.id !== profileUserId) {
+        throw new Error('プロフィール情報が最新ではありません。画面を開き直してから再度お試しください。');
+      }
 
       // nicknameはマウント時に取得済みの値を再利用する（同じデータの二重取得を避ける）
       const userName = nickname || '匿名ユーザー';
