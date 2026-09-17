@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { profileApi } from '@/features/profile/api/api';
 import { supabase } from '../utils/supabase';
 
 type ItemType = {
@@ -49,11 +50,52 @@ export default function TradeCreateScreen() {
 
   const [items, setItems] = useState<ItemType[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
-  
+
   const [haveItem, setHaveItem] = useState<ItemType | null>(null);
   const [wantItem, setWantItem] = useState<ItemType | null>(null);
-  
+
   const [loading, setLoading] = useState(false);
+
+  const [nickname, setNickname] = useState('');
+  // マウント時にnicknameを取得した相手のuser_id。送信時のuser.idと突き合わせ、
+  // アカウント切り替え等で別人のnicknameを誤って使わないようにするためのガード。
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  // nullは「未取得」を表す。0(残高0pt)と区別するため、初期値をnullにしている。
+  const [pointsBalance, setPointsBalance] = useState<number | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    // 画面を離れた後に非同期処理が完了してもsetStateしないためのガード
+    let cancelled = false;
+
+    (async () => {
+      // 表示専用の読み取りなので、ネットワーク往復を伴うgetUser()ではなく
+      // ローカルセッションを読むだけのgetSession()を使う（実際の書き込み直前の
+      // 認証検証はhandleSubmit内のgetUser()が別途行う）。
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        if (!cancelled) setLoadingProfile(false);
+        return;
+      }
+
+      const { data, error } = await profileApi.getProfileByUserId(user.id);
+      if (cancelled) return;
+
+      if (error) {
+        console.error('プロフィール取得エラー:', error);
+      } else if (data) {
+        setNickname(data.nickname ?? '');
+        setPointsBalance(data.points ?? 0);
+        setProfileUserId(user.id);
+      }
+      setLoadingProfile(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!gachaponId) {
@@ -79,6 +121,10 @@ export default function TradeCreateScreen() {
   }, [gachaponId, paramHaveItemId]);
 
   const handleSubmit = async () => {
+    if (loadingProfile) {
+      Alert.alert('読み込み中です', 'プロフィール情報を読み込み中です。少し待ってから再度お試しください。');
+      return;
+    }
     if (!haveItem) {
       Alert.alert('入力エラー', '譲るアイテム（出）を選択してください。');
       return;
@@ -98,13 +144,15 @@ export default function TradeCreateScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('ログイン状態が確認できません。再度ログインしてください。');
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('nickname')
-        .eq('id', user.id)
-        .single();
+      // マウント時に取得したnicknameが今送信しようとしている本人のものか確認する。
+      // 画面を開いたままアカウントが切り替わっていた場合、別人のnicknameを
+      // 誤って使ってしまうことを防ぐ。
+      if (user.id !== profileUserId) {
+        throw new Error('プロフィール情報が最新ではありません。画面を開き直してから再度お試しください。');
+      }
 
-      const userName = profile?.nickname || '匿名ユーザー';
+      // nicknameはマウント時に取得済みの値を再利用する（同じデータの二重取得を避ける）
+      const userName = nickname || '匿名ユーザー';
 
       const { error: dbError } = await supabase.from('trades').insert({
         user_id: user.id,
@@ -150,6 +198,20 @@ export default function TradeCreateScreen() {
         <Text style={styles.pageDescription}>
           在庫報告のアイテムから、トレードに出すアイテムと欲しいアイテムを選択してください。
         </Text>
+
+        <View style={styles.pointsBalanceRow}>
+          {loadingProfile ? (
+            <ActivityIndicator size="small" color="#FF7A00" />
+          ) : pointsBalance === null ? (
+            // 取得失敗時は0ptと区別し、その旨を明示する
+            // （残高0のユーザーと誤解されないようにするため）
+            <Text style={styles.pointsBalanceText}>保有ポイントを取得できませんでした</Text>
+          ) : (
+            <Text style={styles.pointsBalanceText}>
+              保有ポイント: {pointsBalance}pt
+            </Text>
+          )}
+        </View>
 
         {photoUrl && (
           <View style={styles.imageContainer}>
@@ -237,7 +299,7 @@ export default function TradeCreateScreen() {
         </View>
 
         <View style={styles.submitArea}>
-          {loading ? (
+          {loading || loadingProfile ? (
             <ActivityIndicator size="large" color="#FF6F00" />
           ) : (
             <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
@@ -268,6 +330,14 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 20,
     lineHeight: 20,
+  },
+  pointsBalanceRow: {
+    marginBottom: 16,
+  },
+  pointsBalanceText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
   },
   imageContainer: {
     height: 140,
