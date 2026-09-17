@@ -190,10 +190,10 @@ export default function TradeCreateScreen() {
         p_user_name: userName,
         p_item_give: haveItem.name,
         p_item_want: wantItem.name,
-        p_report_id: reportId || null,
-        p_store_id: storeId || null,
-        p_gachapon_id: gachaponId || null,
-        p_photo_url: photoUrl || null,
+        p_report_id: reportId,
+        p_store_id: storeId,
+        p_gachapon_id: gachaponId,
+        p_photo_url: photoUrl,
       });
 
       if (rpcError) throw new Error(`トレード作成失敗: ${rpcError.message}`);
