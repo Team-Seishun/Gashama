@@ -180,21 +180,23 @@ export default function TradeCreateScreen() {
       // nicknameはマウント時に取得済みの値を再利用する（同じデータの二重取得を避ける）
       const userName = nickname || '匿名ユーザー';
 
-      const { error: dbError } = await supabase.from('trades').insert({
-        user_id: user.id,
-        report_id: reportId || null,
-        store_id: storeId || null,
-        gachapon_id: gachaponId || null,
-        have_item_id: haveItem.id,
-        want_item_id: wantItem.id,
-        status: 1, 
-        photo_url: photoUrl || null,
-        user_name: userName,
-        item_give: haveItem.name,
-        item_want: wantItem.name,
+      // ポイント消費とtradesへのinsertをRPC内でまとめて行う（片方だけ成功する
+      // 不整合を防ぐため）。user_id/statusはRPC内部（auth.uid()・固定値）で
+      // 設定されるため渡さない。
+      const { error: rpcError } = await supabase.rpc('create_trade_with_points', {
+        p_points_used: pointsUsed,
+        p_have_item_id: haveItem.id,
+        p_want_item_id: wantItem.id,
+        p_user_name: userName,
+        p_item_give: haveItem.name,
+        p_item_want: wantItem.name,
+        p_report_id: reportId,
+        p_store_id: storeId,
+        p_gachapon_id: gachaponId,
+        p_photo_url: photoUrl,
       });
 
-      if (dbError) throw new Error(`トレード作成失敗: ${dbError.message}`);
+      if (rpcError) throw new Error(`トレード作成失敗: ${rpcError.message}`);
 
       Alert.alert('募集完了', 'トレードの募集を開始しました！', [
         {
