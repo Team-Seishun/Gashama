@@ -63,10 +63,16 @@ export default function TradeCreateScreen() {
   // nullは「未取得」を表す。0(残高0pt)と区別するため、初期値をnullにしている。
   const [pointsBalance, setPointsBalance] = useState<number | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  // 未ログインでpointsBalanceがnullのままのケースを、取得失敗によるnullと区別するためのフラグ。
+  // 未ログイン時はポイント不足ではなく認証エラーとして扱いたいため、送信ボタンの無効化条件から除外する
+  // （handleSubmit内の`ログイン状態が確認できません`エラーへ到達できるようにするため）。
+  const [isLoggedOut, setIsLoggedOut] = useState(false);
   // 1トレードあたりの消費ポイント上限（create_trade_with_points RPC側の固定値と一致させる）
   const POINTS_PER_TRADE_LIMIT = 20;
-  // null/0のいずれも「ステッパー・送信ボタンを無効化する」対象（表示文言のみ原因別に分ける）
+  // null/0のいずれも「ステッパーを無効化する」対象（表示文言のみ原因別に分ける）
   const isPointsUnavailable = pointsBalance === null || pointsBalance === 0;
+  // 送信ボタンは、未ログインの場合はhandleSubmit側の認証エラーに委ねるため無効化しない
+  const isSubmitBlockedByPoints = isPointsUnavailable && !isLoggedOut;
   const maxPointsUsed = pointsBalance === null ? 0 : Math.min(pointsBalance, POINTS_PER_TRADE_LIMIT);
   const [pointsUsed, setPointsUsed] = useState(1);
 
@@ -81,7 +87,10 @@ export default function TradeCreateScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (!user) {
-        if (!cancelled) setLoadingProfile(false);
+        if (!cancelled) {
+          setIsLoggedOut(true);
+          setLoadingProfile(false);
+        }
         return;
       }
 
@@ -238,7 +247,7 @@ export default function TradeCreateScreen() {
             <Text style={styles.fieldTitle}>消費ポイント</Text>
           </View>
           <Text style={styles.fieldDescription}>
-            使ったポイント数が多いほど、トレード一覧で目立って表示されます。
+            このトレード募集に使用するポイント数を選択してください。
           </Text>
           <View style={styles.stepperRow}>
             <TouchableOpacity
@@ -349,9 +358,9 @@ export default function TradeCreateScreen() {
             <ActivityIndicator size="large" color="#FF6F00" />
           ) : (
             <TouchableOpacity
-              style={[styles.submitButton, isPointsUnavailable && styles.submitButtonDisabled]}
+              style={[styles.submitButton, isSubmitBlockedByPoints && styles.submitButtonDisabled]}
               onPress={handleSubmit}
-              disabled={isPointsUnavailable}
+              disabled={isSubmitBlockedByPoints}
             >
               <Ionicons name="swap-horizontal" size={20} color="#FFF" style={{ marginRight: 8 }} />
               <Text style={styles.submitButtonText}>トレードを募集する</Text>
