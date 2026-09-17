@@ -40,7 +40,18 @@ interface Trade {
   stores?: Store | Store[];
 }
 
-export default function TradeList() {
+interface TradeListProps {
+  // 親から渡され、値が変わるたびに（在庫報告タブと見た目・挙動を揃えた）リロードを行う
+  reloadKey?: number;
+}
+
+// タブ切替のたびにTradeListは再マウントされるため、モジュールスコープに前回の取得結果を
+// キャッシュしておく。これにより2回目以降の表示では在庫報告タブと同じく「一覧を表示した
+// ままリフレッシュ用のスピナーを出す」デザインになり、毎回全画面ローディングに戻る（＝在庫
+// 報告タブとデザインが揃わない）のを防ぐ。
+let cachedTrades: Trade[] | null = null;
+
+export default function TradeList({ reloadKey }: TradeListProps) {
   const router = useRouter();
   const { filterType, filterId, filterName } = useLocalSearchParams<{
     filterType: string;
@@ -48,9 +59,9 @@ export default function TradeList() {
     filterName: string;
   }>();
 
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>(cachedTrades ?? []);
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(cachedTrades === null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
@@ -75,7 +86,8 @@ export default function TradeList() {
         setFetchError('データの取得に失敗しました');
       } else if (tradeData) {
         setFetchError(null);
-        setTrades(tradeData as Trade[]);
+        cachedTrades = tradeData as Trade[];
+        setTrades(cachedTrades);
       }
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -114,6 +126,10 @@ export default function TradeList() {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      // 前回取得済みのキャッシュがあれば一覧はすぐ表示し、裏でリフレッシュ用スピナーを出しつつ更新する
+      if (cachedTrades !== null) {
+        setRefreshing(true);
+      }
       await fetchTrades();
     };
     loadInitialData();
@@ -137,6 +153,18 @@ export default function TradeList() {
       channel.unsubscribe();
     };
   }, []);
+
+  // reloadKeyが変化したら再取得する（初回マウント時は上のuseEffectで取得済みのためスキップ）
+  const isFirstReloadRef = useRef(true);
+  useEffect(() => {
+    if (isFirstReloadRef.current) {
+      isFirstReloadRef.current = false;
+      return;
+    }
+    setRefreshing(true);
+    fetchTrades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   const filteredTrades = useMemo(() => {
     let filtered = trades;
@@ -396,6 +424,7 @@ export default function TradeList() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={['#FF7A00']}
+            tintColor="#FF7A00"
           />
         }
         ListEmptyComponent={

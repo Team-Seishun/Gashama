@@ -1,6 +1,6 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { supabase } from '@/utils/supabase';
@@ -39,6 +39,9 @@ export default function PostScreen() {
   const ITEMS_PER_PAGE = 20;
 
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+
+  // トレードタブのボタンを押すたびに値を変え、TradeList側で必ず再取得させるためのキー
+  const [tradeReloadKey, setTradeReloadKey] = useState(0);
 
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
@@ -135,6 +138,18 @@ export default function PostScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterId]);
 
+  // 在庫報告タブのボタン: 既に在庫報告タブにいる場合でも必ず再取得する
+  const handleInventoryTabPress = () => {
+    setActiveTab('inventory');
+    fetchInventories();
+  };
+
+  // トレードタブのボタン: 既にトレードタブにいる場合でもTradeList側の再取得を必ず走らせる
+  const handleTradeTabPress = () => {
+    setActiveTab('trade');
+    setTradeReloadKey((prev) => prev + 1);
+  };
+
   const renderInventoryItem = useCallback(({ item }: { item: ReportItem }) => (
     <TouchableOpacity 
       activeOpacity={0.8}
@@ -148,18 +163,18 @@ export default function PostScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        
+
         {/* 上部タブ (Segmented Control) */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabButton, activeTab === 'inventory' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('inventory')}
+            onPress={handleInventoryTabPress}
           >
             <Text style={[styles.tabText, activeTab === 'inventory' && styles.tabTextActive]}>在庫報告</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabButton, activeTab === 'trade' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('trade')}
+            onPress={handleTradeTabPress}
           >
             <Text style={[styles.tabText, activeTab === 'trade' && styles.tabTextActive]}>トレード</Text>
           </TouchableOpacity>
@@ -178,7 +193,9 @@ export default function PostScreen() {
 
             {/* リスト表示 */}
             {loadingInventories && inventories.length === 0 ? (
-              <ActivityIndicator size="large" color="#FF7A00" style={{ marginTop: 40 }} />
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color="#FF7A00" />
+              </View>
             ) : (
               <FlashList
                 data={inventories}
@@ -186,8 +203,14 @@ export default function PostScreen() {
                 renderItem={renderInventoryItem}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                refreshing={loadingInventories && inventories.length > 0}
-                onRefresh={fetchInventories}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={loadingInventories && inventories.length > 0}
+                    onRefresh={fetchInventories}
+                    colors={['#FF7A00']}
+                    tintColor="#FF7A00"
+                  />
+                }
                 onEndReached={fetchMoreInventories}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={
@@ -203,7 +226,7 @@ export default function PostScreen() {
           </>
         )}
 
-        {activeTab === 'trade' && <TradeList />}
+        {activeTab === 'trade' && <TradeList reloadKey={tradeReloadKey} />}
 
       </View>
 
@@ -230,12 +253,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#F5F5F5',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 15,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 25,
     marginHorizontal: 5,
@@ -263,6 +286,11 @@ const styles = StyleSheet.create({
   // リスト
   listContent: {
     padding: 20,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // 共通カードスタイル
