@@ -1,6 +1,7 @@
 import SearchBar from '@/components/SearchBar';
 import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
+import { commonStyles } from '@/styles/common';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
@@ -51,6 +52,14 @@ interface TradeListProps {
 // 報告タブとデザインが揃わない）のを防ぐ。
 let cachedTrades: Trade[] | null = null;
 
+// ログイン中のユーザーが切り替わった際に前のユーザーの一覧が一瞬見えてしまわないよう、
+// 認証状態が変わったらキャッシュを破棄する。
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
+    cachedTrades = null;
+  }
+});
+
 export default function TradeList({ reloadKey }: TradeListProps) {
   const router = useRouter();
   const { filterType, filterId, filterName } = useLocalSearchParams<{
@@ -67,6 +76,17 @@ export default function TradeList({ reloadKey }: TradeListProps) {
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
   // setProcessingTradeIdの反映(再レンダリング)を待たずに二重送信を同期的にブロックするためのロック
   const processingTradeRef = useRef<string | null>(null);
+  // 連打やRealtime通知が重なった際に、古いリクエストの応答が新しい応答を上書きしないようにするための識別子
+  const requestIdRef = useRef(0);
+
+  // trades stateとcachedTradesが食い違わないよう、常にセットで更新する
+  const updateTrades = (updater: (prev: Trade[]) => Trade[]) => {
+    setTrades((prev) => {
+      const next = updater(prev);
+      cachedTrades = next;
+      return next;
+    });
+  };
 
   // 提供アイテム選択モーダル用ステート
   const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
@@ -75,26 +95,33 @@ export default function TradeList({ reloadKey }: TradeListProps) {
   const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   const fetchTrades = async () => {
+    // このリクエストより後に発行されたリクエストの応答が先に返ってきていたら、
+    // 自分（古い方）の応答は画面に反映せず捨てる
+    const myRequestId = ++requestIdRef.current;
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
         .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
+      if (myRequestId !== requestIdRef.current) return;
+
       if (tradeError) {
         console.error('Error fetching trades:', tradeError);
         setFetchError('データの取得に失敗しました');
       } else if (tradeData) {
         setFetchError(null);
-        cachedTrades = tradeData as Trade[];
-        setTrades(cachedTrades);
+        updateTrades(() => tradeData as Trade[]);
       }
     } catch (err) {
+      if (myRequestId !== requestIdRef.current) return;
       console.error('Unexpected error:', err);
       setFetchError('データの取得に失敗しました');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (myRequestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -243,7 +270,7 @@ export default function TradeList({ reloadKey }: TradeListProps) {
       if (rpcError) throw rpcError;
 
       setRequestedTradeIds((prev) => new Set(prev).add(trade.id));
-      setTrades((prev) =>
+      updateTrades((prev) =>
         prev.map((t) => (t.id === trade.id ? { ...t, is_requesting: true } : t))
       );
 
@@ -398,7 +425,7 @@ export default function TradeList({ reloadKey }: TradeListProps) {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[commonStyles.centerContainer, styles.centerContainerPadding]}>
         <ActivityIndicator size="large" color="#FF7A00" />
       </View>
     );
@@ -428,7 +455,7 @@ export default function TradeList({ reloadKey }: TradeListProps) {
           />
         }
         ListEmptyComponent={
-          <View style={styles.centerContainer}>
+          <View style={[commonStyles.centerContainer, styles.centerContainerPadding]}>
             <Text style={styles.emptyText}>
               {errorMsg ? errorMsg : '該当するトレード募集がありません'}
             </Text>
@@ -510,10 +537,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 16,
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  centerContainerPadding: {
     paddingVertical: 32,
   },
   card: {

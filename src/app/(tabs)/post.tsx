@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
@@ -8,6 +8,7 @@ import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
 import SearchBar from '@/components/SearchBar';
 import ReportDetailModal from '@/components/ReportDetailModal';
+import { commonStyles } from '@/styles/common';
 
 // ----------------------------------------------------
 // メインコンポーネント
@@ -43,8 +44,13 @@ export default function PostScreen() {
   // トレードタブのボタンを押すたびに値を変え、TradeList側で必ず再取得させるためのキー
   const [tradeReloadKey, setTradeReloadKey] = useState(0);
 
+  // 連打などでfetchInventoriesが重なって呼ばれた際に、古いリクエストの応答が新しい応答を
+  // 上書きしないようにするための識別子
+  const inventoryRequestIdRef = useRef(0);
+
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
+    const myRequestId = ++inventoryRequestIdRef.current;
     setLoadingInventories(true);
     setPage(0);
     setHasMore(true);
@@ -59,7 +65,7 @@ export default function PostScreen() {
           gachapon_items(*)
         `)
         .order('created_at', { ascending: false });
-        
+
       if (filterType === 'store' && filterId) {
         query = query.eq('store_id', filterId);
       } else if (filterType === 'gachapon' && filterId) {
@@ -70,6 +76,8 @@ export default function PostScreen() {
 
       const { data, error } = await query.range(0, ITEMS_PER_PAGE - 1);
 
+      if (myRequestId !== inventoryRequestIdRef.current) return;
+
       if (error) {
         console.error('在庫情報の取得エラー:', error);
       } else if (data) {
@@ -79,9 +87,12 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
+      if (myRequestId !== inventoryRequestIdRef.current) return;
       console.error(e);
     } finally {
-      setLoadingInventories(false);
+      if (myRequestId === inventoryRequestIdRef.current) {
+        setLoadingInventories(false);
+      }
     }
   };
 
@@ -193,7 +204,7 @@ export default function PostScreen() {
 
             {/* リスト表示 */}
             {loadingInventories && inventories.length === 0 ? (
-              <View style={styles.centerContainer}>
+              <View style={commonStyles.centerContainer}>
                 <ActivityIndicator size="large" color="#FF7A00" />
               </View>
             ) : (
@@ -286,11 +297,6 @@ const styles = StyleSheet.create({
   // リスト
   listContent: {
     padding: 20,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 
   // 共通カードスタイル
