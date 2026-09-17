@@ -35,6 +35,7 @@ interface Trade {
   user_name?: string | null;
   item_give?: string | null;
   item_want?: string | null;
+  points_used?: number | null;
   is_requesting?: boolean;
   profiles?: Profile | Profile[];
   stores?: Store | Store[];
@@ -67,7 +68,8 @@ export default function TradeList() {
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
-        .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
+        .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, points_used, profiles(icon_image), stores(name)')
+        .order('points_used', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (tradeError) {
