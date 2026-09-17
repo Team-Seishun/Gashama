@@ -135,6 +135,9 @@ export default function TradeCreateScreen() {
       });
   }, [gachaponId, paramHaveItemId]);
 
+  const isDecrementDisabled = isPointsUnavailable || pointsUsed <= 1;
+  const isIncrementDisabled = isPointsUnavailable || pointsUsed >= maxPointsUsed;
+
   const decrementPointsUsed = () => {
     setPointsUsed(prev => Math.max(1, prev - 1));
   };
@@ -251,19 +254,19 @@ export default function TradeCreateScreen() {
           </Text>
           <View style={styles.stepperRow}>
             <TouchableOpacity
-              style={[styles.stepperButton, (isPointsUnavailable || pointsUsed <= 1) && styles.stepperButtonDisabled]}
+              style={[styles.stepperButton, isDecrementDisabled && styles.stepperButtonDisabled]}
               onPress={decrementPointsUsed}
-              disabled={isPointsUnavailable || pointsUsed <= 1}
+              disabled={isDecrementDisabled}
             >
-              <Ionicons name="remove" size={20} color={(isPointsUnavailable || pointsUsed <= 1) ? '#CCC' : '#FF6F00'} />
+              <Ionicons name="remove" size={20} color={isDecrementDisabled ? '#CCC' : '#FF6F00'} />
             </TouchableOpacity>
             <Text style={styles.stepperValue}>{isPointsUnavailable ? 0 : pointsUsed}pt</Text>
             <TouchableOpacity
-              style={[styles.stepperButton, (isPointsUnavailable || pointsUsed >= maxPointsUsed) && styles.stepperButtonDisabled]}
+              style={[styles.stepperButton, isIncrementDisabled && styles.stepperButtonDisabled]}
               onPress={incrementPointsUsed}
-              disabled={isPointsUnavailable || pointsUsed >= maxPointsUsed}
+              disabled={isIncrementDisabled}
             >
-              <Ionicons name="add" size={20} color={(isPointsUnavailable || pointsUsed >= maxPointsUsed) ? '#CCC' : '#FF6F00'} />
+              <Ionicons name="add" size={20} color={isIncrementDisabled ? '#CCC' : '#FF6F00'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -424,7 +427,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepperButtonDisabled: {
-    borderColor: '#CCC',
+    backgroundColor: '#F9F9F9',
+    opacity: 0.5,
   },
   stepperValue: {
     fontSize: 18,
@@ -435,6 +439,7 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     backgroundColor: '#CCC',
+    opacity: 0.5,
   },
   imageContainer: {
     height: 140,
