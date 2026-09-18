@@ -1,14 +1,23 @@
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { Asset } from 'expo-asset';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import ReportDetailModal from '@/components/ReportDetailModal';
 
 const { width, height } = Dimensions.get('window');
+
+// 技育博デモ用の隠しコマンド設定。
+// 「現在地に戻る」ボタンを一定時間内にHIDDEN_COMMAND_TAP_COUNT回連続タップすると発動する。
+const HIDDEN_COMMAND_TAP_COUNT = 10;
+const HIDDEN_COMMAND_TAP_WINDOW_MS = 2000;
+// Supabase Storageの'photos'バケット内で、証拠画像を使い回すための固定パス
+// （upsert:trueで上書きするため、複数回発動してもオブジェクトは増えない）。
+const HIDDEN_COMMAND_PHOTO_STORAGE_PATH = 'reports/hidden-command-gieku-haku.png';
 
 // ガシャポン設置場所の型定義
 type LocationData = {
@@ -69,6 +78,101 @@ export default function MapScreen() {
       console.log('Error getting current location:', error);
     }
   }, [location]);
+
+  // 隠しコマンド（現在地に戻るボタン連打）関連の状態
+  const hiddenCommandTapCountRef = useRef(0);
+  const hiddenCommandLastTapAtRef = useRef(0);
+  const hiddenCommandPhotoUrlRef = useRef<string | null>(null);
+  const isTriggeringHiddenCommandRef = useRef(false);
+
+  // 証拠画像（「技育博専用」テキスト画像）をStorageにアップロードし、公開URLを返す。
+  // 一度アップロードしたURLはセッション中キャッシュして使い回す。
+  const uploadHiddenCommandPhoto = useCallback(async () => {
+    if (hiddenCommandPhotoUrlRef.current) {
+      return hiddenCommandPhotoUrlRef.current;
+    }
+
+    const asset = Asset.fromModule(require('@/assets/images/gieku-haku-exclusive.png'));
+    await asset.downloadAsync();
+    if (!asset.localUri) {
+      throw new Error('隠しコマンド用画像の読み込みに失敗しました。');
+    }
+
+    const response = await fetch(asset.localUri);
+    const arrayBuffer = await response.arrayBuffer();
+
+    const { error: uploadError } = await supabase.storage
+      .from('photos')
+      .upload(HIDDEN_COMMAND_PHOTO_STORAGE_PATH, arrayBuffer, {
+        contentType: 'image/png',
+        upsert: true,
+      });
+    if (uploadError) throw new Error(`隠しコマンド用画像のアップロードに失敗しました: ${uploadError.message}`);
+
+    const { data: publicUrlData } = supabase.storage
+      .from('photos')
+      .getPublicUrl(HIDDEN_COMMAND_PHOTO_STORAGE_PATH);
+
+    hiddenCommandPhotoUrlRef.current = publicUrlData.publicUrl;
+    return publicUrlData.publicUrl;
+  }, []);
+
+  // 隠しコマンド本体。award_hidden_command_points RPCを呼び出し、
+  // ポイント付与と対象ガチャポンの在庫一括投稿を行う。
+  const triggerHiddenCommand = useCallback(async () => {
+    if (isTriggeringHiddenCommandRef.current) return;
+    isTriggeringHiddenCommandRef.current = true;
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('隠しコマンド', 'ログインしていないため隠しコマンドを発動できません。');
+        return;
+      }
+
+      const photoUrl = await uploadHiddenCommandPhoto();
+
+      const { data: pointsAwarded, error } = await supabase.rpc('award_hidden_command_points', {
+        p_photo_url: photoUrl,
+      });
+
+      if (error) {
+        Alert.alert('隠しコマンド', `発動に失敗しました: ${error.message}`);
+        return;
+      }
+
+      Alert.alert(
+        '隠しコマンド発動！',
+        `技育博専用ボーナスで+${pointsAwarded}pt獲得しました！\n対象ガチャポンの在庫投稿を一括で完了しました。`
+      );
+    } catch (error: any) {
+      console.error('隠しコマンド発動エラー:', error);
+      Alert.alert('隠しコマンド', error.message || '発動に失敗しました。');
+    } finally {
+      isTriggeringHiddenCommandRef.current = false;
+    }
+  }, [uploadHiddenCommandPhoto]);
+
+  // 「現在地に戻る」ボタンのタップを監視し、一定時間内にHIDDEN_COMMAND_TAP_COUNT回
+  // 連続タップされたら隠しコマンドを発動する。通常の現在地移動機能はそのまま動作させる。
+  const handleMyLocationButtonPress = useCallback(() => {
+    const now = Date.now();
+    if (now - hiddenCommandLastTapAtRef.current > HIDDEN_COMMAND_TAP_WINDOW_MS) {
+      hiddenCommandTapCountRef.current = 0;
+    }
+    hiddenCommandTapCountRef.current += 1;
+    hiddenCommandLastTapAtRef.current = now;
+
+    if (hiddenCommandTapCountRef.current >= HIDDEN_COMMAND_TAP_COUNT) {
+      hiddenCommandTapCountRef.current = 0;
+      triggerHiddenCommand();
+    }
+
+    goToMyLocation();
+  }, [goToMyLocation, triggerHiddenCommand]);
+
   const snapPoints = useMemo(() => ['30%', '70%'], []);
 
   const navigation = useNavigation();
@@ -356,7 +460,7 @@ export default function MapScreen() {
 
       {/* 現在地に戻るボタン */}
       {!selectedLocation && (
-        <TouchableOpacity style={styles.myLocationButton} onPress={goToMyLocation}>
+        <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocationButtonPress}>
           <Ionicons name="navigate" size={24} color="#007AFF" />
         </TouchableOpacity>
       )}
