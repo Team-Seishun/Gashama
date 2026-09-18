@@ -2,6 +2,7 @@ import SearchBar from '@/components/SearchBar';
 import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { commonStyles } from '@/styles/common';
+import { useRequestGuard } from '@/hooks/useRequestGuard';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
@@ -68,8 +69,8 @@ export default function TradeList({ reloadKey }: TradeListProps) {
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
   // setProcessingTradeIdの反映(再レンダリング)を待たずに二重送信を同期的にブロックするためのロック
   const processingTradeRef = useRef<string | null>(null);
-  // 連打やRealtime通知が重なった際に、古いリクエストの応答が新しい応答を上書きしないようにするための識別子
-  const requestIdRef = useRef(0);
+  // 連打やRealtime通知が重なった際に、古いリクエストの応答が新しい応答を上書きしないようにするためのガード
+  const requestGuard = useRequestGuard();
 
   // trades stateとcachedTradesが食い違わないよう、常にセットで更新する
   const updateTrades = (updater: (prev: Trade[]) => Trade[]) => {
@@ -89,14 +90,14 @@ export default function TradeList({ reloadKey }: TradeListProps) {
   const fetchTrades = async () => {
     // このリクエストより後に発行されたリクエストの応答が先に返ってきていたら、
     // 自分（古い方）の応答は画面に反映せず捨てる
-    const myRequestId = ++requestIdRef.current;
+    const myRequestId = requestGuard.start();
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
         .select('id, user_id, store_id, item_give, item_want, want_item_id, user_name, status, created_at, gachapon_id, photo_url, profiles(icon_image), stores(name)')
         .order('created_at', { ascending: false });
 
-      if (myRequestId !== requestIdRef.current) return;
+      if (requestGuard.isStale(myRequestId)) return;
 
       if (tradeError) {
         console.error('Error fetching trades:', tradeError);
@@ -106,11 +107,11 @@ export default function TradeList({ reloadKey }: TradeListProps) {
         updateTrades(() => tradeData as Trade[]);
       }
     } catch (err) {
-      if (myRequestId !== requestIdRef.current) return;
+      if (requestGuard.isStale(myRequestId)) return;
       console.error('Unexpected error:', err);
       setFetchError('データの取得に失敗しました');
     } finally {
-      if (myRequestId === requestIdRef.current) {
+      if (!requestGuard.isStale(myRequestId)) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -181,6 +182,9 @@ export default function TradeList({ reloadKey }: TradeListProps) {
     return () => {
       channel.unsubscribe();
       authSubscription.unsubscribe();
+      // アンマウント後にfetchTradesの応答が届いても、モジュールスコープのcachedTradesを
+      // 上書きしないよう、発行済みのリクエストIDをすべて無効化しておく
+      requestGuard.invalidate();
     };
   }, []);
 

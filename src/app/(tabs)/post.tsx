@@ -1,5 +1,5 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
@@ -9,6 +9,7 @@ import TradeList from '@/components/TradeList';
 import SearchBar from '@/components/SearchBar';
 import ReportDetailModal from '@/components/ReportDetailModal';
 import { commonStyles } from '@/styles/common';
+import { useRequestGuard } from '@/hooks/useRequestGuard';
 
 // ----------------------------------------------------
 // メインコンポーネント
@@ -45,12 +46,12 @@ export default function PostScreen() {
   const [tradeReloadKey, setTradeReloadKey] = useState(0);
 
   // 連打などでfetchInventoriesが重なって呼ばれた際に、古いリクエストの応答が新しい応答を
-  // 上書きしないようにするための識別子
-  const inventoryRequestIdRef = useRef(0);
+  // 上書きしないようにするためのガード
+  const inventoryRequestGuard = useRequestGuard();
 
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
-    const myRequestId = ++inventoryRequestIdRef.current;
+    const myRequestId = inventoryRequestGuard.start();
     setLoadingInventories(true);
     setPage(0);
     setHasMore(true);
@@ -79,7 +80,7 @@ export default function PostScreen() {
 
       const { data, error } = await query.range(0, ITEMS_PER_PAGE - 1);
 
-      if (myRequestId !== inventoryRequestIdRef.current) return;
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
 
       if (error) {
         console.error('在庫情報の取得エラー:', error);
@@ -90,10 +91,10 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
-      if (myRequestId !== inventoryRequestIdRef.current) return;
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
       console.error(e);
     } finally {
-      if (myRequestId === inventoryRequestIdRef.current) {
+      if (!inventoryRequestGuard.isStale(myRequestId)) {
         setLoadingInventories(false);
       }
     }
@@ -104,7 +105,7 @@ export default function PostScreen() {
 
     // fetchInventories（タブ再押下等によるリセット）が後から発行された場合、
     // このリクエストの応答は捨てて新しい1ページ目のリストへの追記を防ぐ
-    const myRequestId = ++inventoryRequestIdRef.current;
+    const myRequestId = inventoryRequestGuard.start();
     setLoadingMore(true);
     const nextPage = page + 1;
     const from = nextPage * ITEMS_PER_PAGE;
@@ -132,7 +133,7 @@ export default function PostScreen() {
 
       const { data, error } = await query.range(from, to);
 
-      if (myRequestId !== inventoryRequestIdRef.current) return;
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
 
       if (error) {
         console.error('追加の在庫情報取得エラー:', error);
@@ -144,10 +145,10 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
-      if (myRequestId !== inventoryRequestIdRef.current) return;
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
       console.error(e);
     } finally {
-      if (myRequestId === inventoryRequestIdRef.current) {
+      if (!inventoryRequestGuard.isStale(myRequestId)) {
         setLoadingMore(false);
       }
     }
