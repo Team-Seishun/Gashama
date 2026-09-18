@@ -1,5 +1,6 @@
 import { authApi } from '@/features/auth/api/api';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { resolvePointsBalance } from '@/features/points/pointsLogic';
 import { profileApi, ProfileRecord } from '@/features/profile/api/api';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
 import { supabase } from '@/utils/supabase';
@@ -237,7 +238,7 @@ export default function ProfileScreen() {
   const starRating = profile?.evaluate_star != null ? profile.evaluate_star : 4.9;
   const tradeHistoryCount = profile?.trade_history != null ? profile.trade_history : completedTrades.length;
   const contributionLevel = profile?.contribution_level != null ? profile.contribution_level : 1;
-  const pointsBalance = profile?.points ?? 0;
+  const pointsBalance = resolvePointsBalance(profile?.points);
 
   if (!initialized || loading) {
     return (

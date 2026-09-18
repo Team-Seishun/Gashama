@@ -15,6 +15,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { profileApi } from '@/features/profile/api/api';
+import {
+  computeMaxPointsUsed,
+  decrementPointsUsed as computeDecrementedPointsUsed,
+  incrementPointsUsed as computeIncrementedPointsUsed,
+  isPointsUnavailable as computeIsPointsUnavailable,
+  isStepperDecrementDisabled,
+  isStepperIncrementDisabled,
+  isSubmitBlockedByPoints as computeIsSubmitBlockedByPoints,
+  resolvePointsBalance,
+} from '@/features/points/pointsLogic';
 import { supabase } from '../utils/supabase';
 
 type ItemType = {
@@ -67,13 +77,11 @@ export default function TradeCreateScreen() {
   // 未ログイン時はポイント不足ではなく認証エラーとして扱いたいため、送信ボタンの無効化条件から除外する
   // （handleSubmit内の`ログイン状態が確認できません`エラーへ到達できるようにするため）。
   const [isLoggedOut, setIsLoggedOut] = useState(false);
-  // 1トレードあたりの消費ポイント上限（create_trade_with_points RPC側の固定値と一致させる）
-  const POINTS_PER_TRADE_LIMIT = 20;
   // null/0のいずれも「ステッパーを無効化する」対象（表示文言のみ原因別に分ける）
-  const isPointsUnavailable = pointsBalance === null || pointsBalance === 0;
+  const isPointsUnavailable = computeIsPointsUnavailable(pointsBalance);
   // 送信ボタンは、未ログインの場合はhandleSubmit側の認証エラーに委ねるため無効化しない
-  const isSubmitBlockedByPoints = isPointsUnavailable && !isLoggedOut;
-  const maxPointsUsed = pointsBalance === null ? 0 : Math.min(pointsBalance, POINTS_PER_TRADE_LIMIT);
+  const isSubmitBlockedByPoints = computeIsSubmitBlockedByPoints(pointsBalance, isLoggedOut);
+  const maxPointsUsed = computeMaxPointsUsed(pointsBalance);
   const [pointsUsed, setPointsUsed] = useState(1);
 
   useEffect(() => {
@@ -101,7 +109,7 @@ export default function TradeCreateScreen() {
         console.error('プロフィール取得エラー:', error);
       } else if (data) {
         setNickname(data.nickname ?? '');
-        setPointsBalance(data.points ?? 0);
+        setPointsBalance(resolvePointsBalance(data.points));
         setProfileUserId(user.id);
       }
       setLoadingProfile(false);
@@ -135,15 +143,15 @@ export default function TradeCreateScreen() {
       });
   }, [gachaponId, paramHaveItemId]);
 
-  const isDecrementDisabled = isPointsUnavailable || pointsUsed <= 1;
-  const isIncrementDisabled = isPointsUnavailable || pointsUsed >= maxPointsUsed;
+  const isDecrementDisabled = isStepperDecrementDisabled(pointsBalance, pointsUsed);
+  const isIncrementDisabled = isStepperIncrementDisabled(pointsBalance, pointsUsed, maxPointsUsed);
 
   const decrementPointsUsed = () => {
-    setPointsUsed(prev => Math.max(1, prev - 1));
+    setPointsUsed(prev => computeDecrementedPointsUsed(prev));
   };
 
   const incrementPointsUsed = () => {
-    setPointsUsed(prev => Math.min(maxPointsUsed, prev + 1));
+    setPointsUsed(prev => computeIncrementedPointsUsed(prev, maxPointsUsed));
   };
 
   const handleSubmit = async () => {
