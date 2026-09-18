@@ -52,14 +52,6 @@ interface TradeListProps {
 // 報告タブとデザインが揃わない）のを防ぐ。
 let cachedTrades: Trade[] | null = null;
 
-// ログイン中のユーザーが切り替わった際に前のユーザーの一覧が一瞬見えてしまわないよう、
-// 認証状態が変わったらキャッシュを破棄する。
-supabase.auth.onAuthStateChange((event) => {
-  if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
-    cachedTrades = null;
-  }
-});
-
 export default function TradeList({ reloadKey }: TradeListProps) {
   const router = useRouter();
   const { filterType, filterId, filterName } = useLocalSearchParams<{
@@ -176,8 +168,19 @@ export default function TradeList({ reloadKey }: TradeListProps) {
       )
       .subscribe();
 
+    // ログイン中のユーザーが切り替わった際に前のユーザーの一覧が一瞬見えてしまわないよう、
+    // 認証状態が変わったらキャッシュと現在表示中のtrades stateの両方を破棄する。
+    // コンポーネントのマウント中だけ購読し、アンマウント時に必ずunsubscribeする。
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
+        cachedTrades = null;
+        setTrades([]);
+      }
+    });
+
     return () => {
       channel.unsubscribe();
+      authSubscription.unsubscribe();
     };
   }, []);
 

@@ -54,6 +54,9 @@ export default function PostScreen() {
     setLoadingInventories(true);
     setPage(0);
     setHasMore(true);
+    // fetchMoreInventoriesが進行中だった場合、このリセットで無効化されるため
+    // ローディング表示が残り続けないようここでも解除しておく
+    setLoadingMore(false);
     try {
       let query = supabase
         .from('reports')
@@ -99,6 +102,9 @@ export default function PostScreen() {
   const fetchMoreInventories = async () => {
     if (!hasMore || loadingMore || loadingInventories) return;
 
+    // fetchInventories（タブ再押下等によるリセット）が後から発行された場合、
+    // このリクエストの応答は捨てて新しい1ページ目のリストへの追記を防ぐ
+    const myRequestId = ++inventoryRequestIdRef.current;
     setLoadingMore(true);
     const nextPage = page + 1;
     const from = nextPage * ITEMS_PER_PAGE;
@@ -115,7 +121,7 @@ export default function PostScreen() {
           gachapon_items(*)
         `)
         .order('created_at', { ascending: false });
-        
+
       if (filterType === 'store' && filterId) {
         query = query.eq('store_id', filterId);
       } else if (filterType === 'gachapon' && filterId) {
@@ -125,6 +131,8 @@ export default function PostScreen() {
       }
 
       const { data, error } = await query.range(from, to);
+
+      if (myRequestId !== inventoryRequestIdRef.current) return;
 
       if (error) {
         console.error('追加の在庫情報取得エラー:', error);
@@ -136,9 +144,12 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
+      if (myRequestId !== inventoryRequestIdRef.current) return;
       console.error(e);
     } finally {
-      setLoadingMore(false);
+      if (myRequestId === inventoryRequestIdRef.current) {
+        setLoadingMore(false);
+      }
     }
   };
 
