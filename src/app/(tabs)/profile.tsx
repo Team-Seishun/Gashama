@@ -237,6 +237,7 @@ export default function ProfileScreen() {
   const starRating = profile?.evaluate_star != null ? profile.evaluate_star : 4.9;
   const tradeHistoryCount = profile?.trade_history != null ? profile.trade_history : completedTrades.length;
   const contributionLevel = profile?.contribution_level != null ? profile.contribution_level : 1;
+  const pointsBalance = profile?.points ?? 0;
 
   if (!initialized || loading) {
     return (
@@ -290,6 +291,13 @@ export default function ProfileScreen() {
             <View style={styles.statItem}>
               <Text style={styles.statValue}>Lv.{contributionLevel}</Text>
               <Text style={styles.statLabel}>貢献レベル</Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{pointsBalance}pt</Text>
+              <Text style={styles.statLabel}>保有ポイント</Text>
             </View>
           </View>
 
