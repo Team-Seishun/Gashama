@@ -46,6 +46,21 @@ jobs:
         with:
           version: latest
 
+      - name: (一時診断) SUPABASE_DB_URLの形式を値を出さずに確認
+        # "failed to parse connection string"の原因調査用。値そのものは一切
+        # 出力せず、長さ・接頭辞・記号の個数といった構造だけを確認する。
+        # 問題が解決したらこのステップは削除する。
+        run: |
+          echo "length: ${#SUPABASE_DB_URL}"
+          echo "starts_with_postgresql://: $([[ "$SUPABASE_DB_URL" == postgresql://* ]] && echo yes || echo no)"
+          echo "starts_with_postgres://: $([[ "$SUPABASE_DB_URL" == postgres://* ]] && echo yes || echo no)"
+          echo "at_count: $(grep -o '@' <<< "$SUPABASE_DB_URL" | wc -l)"
+          echo "has_leading_or_trailing_space: $([[ "$SUPABASE_DB_URL" =~ ^[[:space:]]|[[:space:]]$ ]] && echo yes || echo no)"
+          echo "has_bracket: $([[ "$SUPABASE_DB_URL" == *"["* || "$SUPABASE_DB_URL" == *"]"* ]] && echo yes || echo no)"
+          echo "has_quote: $([[ "$SUPABASE_DB_URL" == *\"* || "$SUPABASE_DB_URL" == *"'"* ]] && echo yes || echo no)"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
       - name: pgTAPテストの実行
         # supabase/migrations/には差分マイグレーションしかなく、profiles/trades等の
         # 土台となるテーブル自体を作るCREATE TABLE文が存在しないため、真っさらな
