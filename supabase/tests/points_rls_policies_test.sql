@@ -84,6 +84,12 @@ select
   ) as profile_b
 from room, msg, ledger, profile_pair;
 
+-- 一時テーブルは作成者(postgres/superuser)にしかデフォルトで権限がないため、
+-- このあとset local role authenticatedでなりすました際に読めるよう明示的に
+-- 許可する(CIで実際に実行して初めて判明した不足: permission denied for
+-- table pgtap_rls_fixture)。
+grant select on pgtap_rls_fixture to authenticated;
+
 -- フィクスチャが取得できなかった場合(本番データが空等)は、原因が分かるよう
 -- 明示的に失敗させる(振る舞いベースのテストが無意味にスキップされて
 -- 見かけ上パスするのを防ぐ)。あわせて、フィクスチャ不足時は後続の8件が
