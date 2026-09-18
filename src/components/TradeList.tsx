@@ -1,6 +1,8 @@
 import SearchBar from '@/components/SearchBar';
 import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
+import { commonStyles } from '@/styles/common';
+import { useRequestGuard } from '@/hooks/useRequestGuard';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
@@ -41,7 +43,18 @@ interface Trade {
   stores?: Store | Store[];
 }
 
-export default function TradeList() {
+interface TradeListProps {
+  // 親から渡され、値が変わるたびに（在庫報告タブと見た目・挙動を揃えた）リロードを行う
+  reloadKey?: number;
+}
+
+// タブ切替のたびにTradeListは再マウントされるため、モジュールスコープに前回の取得結果を
+// キャッシュしておく。これにより2回目以降の表示では在庫報告タブと同じく「一覧を表示した
+// ままリフレッシュ用のスピナーを出す」デザインになり、毎回全画面ローディングに戻る（＝在庫
+// 報告タブとデザインが揃わない）のを防ぐ。
+let cachedTrades: Trade[] | null = null;
+
+export default function TradeList({ reloadKey }: TradeListProps) {
   const router = useRouter();
   const { filterType, filterId, filterName } = useLocalSearchParams<{
     filterType: string;
@@ -49,14 +62,25 @@ export default function TradeList() {
     filterName: string;
   }>();
 
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>(cachedTrades ?? []);
   const [requestedTradeIds, setRequestedTradeIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(cachedTrades === null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [processingTradeId, setProcessingTradeId] = useState<string | null>(null);
   // setProcessingTradeIdの反映(再レンダリング)を待たずに二重送信を同期的にブロックするためのロック
   const processingTradeRef = useRef<string | null>(null);
+  // 連打やRealtime通知が重なった際に、古いリクエストの応答が新しい応答を上書きしないようにするためのガード
+  const requestGuard = useRequestGuard();
+
+  // trades stateとcachedTradesが食い違わないよう、常にセットで更新する
+  const updateTrades = (updater: (prev: Trade[]) => Trade[]) => {
+    setTrades((prev) => {
+      const next = updater(prev);
+      cachedTrades = next;
+      return next;
+    });
+  };
 
   // 提供アイテム選択モーダル用ステート
   const [selectedTradeForApply, setSelectedTradeForApply] = useState<Trade | null>(null);
@@ -65,6 +89,9 @@ export default function TradeList() {
   const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   const fetchTrades = async () => {
+    // このリクエストより後に発行されたリクエストの応答が先に返ってきていたら、
+    // 自分（古い方）の応答は画面に反映せず捨てる
+    const myRequestId = requestGuard.start();
     try {
       const { data: tradeData, error: tradeError } = await supabase
         .from('trades')
@@ -72,19 +99,24 @@ export default function TradeList() {
         .order('points_used', { ascending: false })
         .order('created_at', { ascending: false });
 
+      if (requestGuard.isStale(myRequestId)) return;
+
       if (tradeError) {
         console.error('Error fetching trades:', tradeError);
         setFetchError('データの取得に失敗しました');
       } else if (tradeData) {
         setFetchError(null);
-        setTrades(tradeData as Trade[]);
+        updateTrades(() => tradeData as Trade[]);
       }
     } catch (err) {
+      if (requestGuard.isStale(myRequestId)) return;
       console.error('Unexpected error:', err);
       setFetchError('データの取得に失敗しました');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!requestGuard.isStale(myRequestId)) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -116,6 +148,10 @@ export default function TradeList() {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      // 前回取得済みのキャッシュがあれば一覧はすぐ表示し、裏でリフレッシュ用スピナーを出しつつ更新する
+      if (cachedTrades !== null) {
+        setRefreshing(true);
+      }
       await fetchTrades();
     };
     loadInitialData();
@@ -135,10 +171,36 @@ export default function TradeList() {
       )
       .subscribe();
 
+    // ログイン中のユーザーが切り替わった際に前のユーザーの一覧が一瞬見えてしまわないよう、
+    // 認証状態が変わったらキャッシュと現在表示中のtrades stateの両方を破棄する。
+    // コンポーネントのマウント中だけ購読し、アンマウント時に必ずunsubscribeする。
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN') {
+        cachedTrades = null;
+        setTrades([]);
+      }
+    });
+
     return () => {
       channel.unsubscribe();
+      authSubscription.unsubscribe();
+      // アンマウント後にfetchTradesの応答が届いても、モジュールスコープのcachedTradesを
+      // 上書きしないよう、発行済みのリクエストIDをすべて無効化しておく
+      requestGuard.invalidate();
     };
   }, []);
+
+  // reloadKeyが変化したら再取得する（初回マウント時は上のuseEffectで取得済みのためスキップ）
+  const isFirstReloadRef = useRef(true);
+  useEffect(() => {
+    if (isFirstReloadRef.current) {
+      isFirstReloadRef.current = false;
+      return;
+    }
+    setRefreshing(true);
+    fetchTrades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   const filteredTrades = useMemo(() => {
     let filtered = trades;
@@ -217,7 +279,7 @@ export default function TradeList() {
       if (rpcError) throw rpcError;
 
       setRequestedTradeIds((prev) => new Set(prev).add(trade.id));
-      setTrades((prev) =>
+      updateTrades((prev) =>
         prev.map((t) => (t.id === trade.id ? { ...t, is_requesting: true } : t))
       );
 
@@ -372,7 +434,7 @@ export default function TradeList() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={[commonStyles.centerContainer, styles.centerContainerPadding]}>
         <ActivityIndicator size="large" color="#FF7A00" />
       </View>
     );
@@ -398,10 +460,11 @@ export default function TradeList() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={['#FF7A00']}
+            tintColor="#FF7A00"
           />
         }
         ListEmptyComponent={
-          <View style={styles.centerContainer}>
+          <View style={[commonStyles.centerContainer, styles.centerContainerPadding]}>
             <Text style={styles.emptyText}>
               {errorMsg ? errorMsg : '該当するトレード募集がありません'}
             </Text>
@@ -483,10 +546,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 16,
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  centerContainerPadding: {
     paddingVertical: 32,
   },
   card: {

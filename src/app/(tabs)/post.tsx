@@ -1,6 +1,6 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { supabase } from '@/utils/supabase';
@@ -8,6 +8,8 @@ import { InventoryCard, ReportItem } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
 import SearchBar from '@/components/SearchBar';
 import ReportDetailModal from '@/components/ReportDetailModal';
+import { commonStyles } from '@/styles/common';
+import { useRequestGuard } from '@/hooks/useRequestGuard';
 
 // ----------------------------------------------------
 // メインコンポーネント
@@ -40,11 +42,22 @@ export default function PostScreen() {
 
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
+  // トレードタブのボタンを押すたびに値を変え、TradeList側で必ず再取得させるためのキー
+  const [tradeReloadKey, setTradeReloadKey] = useState(0);
+
+  // 連打などでfetchInventoriesが重なって呼ばれた際に、古いリクエストの応答が新しい応答を
+  // 上書きしないようにするためのガード
+  const inventoryRequestGuard = useRequestGuard();
+
   // 在庫報告（reportsテーブル）の実データを取得
   const fetchInventories = async () => {
+    const myRequestId = inventoryRequestGuard.start();
     setLoadingInventories(true);
     setPage(0);
     setHasMore(true);
+    // fetchMoreInventoriesが進行中だった場合、このリセットで無効化されるため
+    // ローディング表示が残り続けないようここでも解除しておく
+    setLoadingMore(false);
     try {
       let query = supabase
         .from('reports')
@@ -56,7 +69,7 @@ export default function PostScreen() {
           gachapon_items(*)
         `)
         .order('created_at', { ascending: false });
-        
+
       if (filterType === 'store' && filterId) {
         query = query.eq('store_id', filterId);
       } else if (filterType === 'gachapon' && filterId) {
@@ -67,6 +80,8 @@ export default function PostScreen() {
 
       const { data, error } = await query.range(0, ITEMS_PER_PAGE - 1);
 
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
+
       if (error) {
         console.error('在庫情報の取得エラー:', error);
       } else if (data) {
@@ -76,15 +91,21 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
       console.error(e);
     } finally {
-      setLoadingInventories(false);
+      if (!inventoryRequestGuard.isStale(myRequestId)) {
+        setLoadingInventories(false);
+      }
     }
   };
 
   const fetchMoreInventories = async () => {
     if (!hasMore || loadingMore || loadingInventories) return;
 
+    // fetchInventories（タブ再押下等によるリセット）が後から発行された場合、
+    // このリクエストの応答は捨てて新しい1ページ目のリストへの追記を防ぐ
+    const myRequestId = inventoryRequestGuard.start();
     setLoadingMore(true);
     const nextPage = page + 1;
     const from = nextPage * ITEMS_PER_PAGE;
@@ -101,7 +122,7 @@ export default function PostScreen() {
           gachapon_items(*)
         `)
         .order('created_at', { ascending: false });
-        
+
       if (filterType === 'store' && filterId) {
         query = query.eq('store_id', filterId);
       } else if (filterType === 'gachapon' && filterId) {
@@ -111,6 +132,8 @@ export default function PostScreen() {
       }
 
       const { data, error } = await query.range(from, to);
+
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
 
       if (error) {
         console.error('追加の在庫情報取得エラー:', error);
@@ -122,9 +145,12 @@ export default function PostScreen() {
         }
       }
     } catch (e) {
+      if (inventoryRequestGuard.isStale(myRequestId)) return;
       console.error(e);
     } finally {
-      setLoadingMore(false);
+      if (!inventoryRequestGuard.isStale(myRequestId)) {
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -134,6 +160,18 @@ export default function PostScreen() {
     fetchInventories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, filterId]);
+
+  // 在庫報告タブのボタン: 既に在庫報告タブにいる場合でも必ず再取得する
+  const handleInventoryTabPress = () => {
+    setActiveTab('inventory');
+    fetchInventories();
+  };
+
+  // トレードタブのボタン: 既にトレードタブにいる場合でもTradeList側の再取得を必ず走らせる
+  const handleTradeTabPress = () => {
+    setActiveTab('trade');
+    setTradeReloadKey((prev) => prev + 1);
+  };
 
   const renderInventoryItem = useCallback(({ item }: { item: ReportItem }) => (
     <TouchableOpacity 
@@ -148,18 +186,18 @@ export default function PostScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        
+
         {/* 上部タブ (Segmented Control) */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabButton, activeTab === 'inventory' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('inventory')}
+            onPress={handleInventoryTabPress}
           >
             <Text style={[styles.tabText, activeTab === 'inventory' && styles.tabTextActive]}>在庫報告</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.tabButton, activeTab === 'trade' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('trade')}
+            onPress={handleTradeTabPress}
           >
             <Text style={[styles.tabText, activeTab === 'trade' && styles.tabTextActive]}>トレード</Text>
           </TouchableOpacity>
@@ -178,7 +216,9 @@ export default function PostScreen() {
 
             {/* リスト表示 */}
             {loadingInventories && inventories.length === 0 ? (
-              <ActivityIndicator size="large" color="#FF7A00" style={{ marginTop: 40 }} />
+              <View style={commonStyles.centerContainer}>
+                <ActivityIndicator size="large" color="#FF7A00" />
+              </View>
             ) : (
               <FlashList
                 data={inventories}
@@ -186,8 +226,14 @@ export default function PostScreen() {
                 renderItem={renderInventoryItem}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-                refreshing={loadingInventories && inventories.length > 0}
-                onRefresh={fetchInventories}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={loadingInventories && inventories.length > 0}
+                    onRefresh={fetchInventories}
+                    colors={['#FF7A00']}
+                    tintColor="#FF7A00"
+                  />
+                }
                 onEndReached={fetchMoreInventories}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={
@@ -203,7 +249,7 @@ export default function PostScreen() {
           </>
         )}
 
-        {activeTab === 'trade' && <TradeList />}
+        {activeTab === 'trade' && <TradeList reloadKey={tradeReloadKey} />}
 
       </View>
 
@@ -230,12 +276,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#F5F5F5',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 15,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 25,
     marginHorizontal: 5,
