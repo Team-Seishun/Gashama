@@ -247,6 +247,12 @@ select skip('RLS検証に使う実データが揃っていないため深い検�
 -- 対象ロールを明示していないポリシー(ダッシュボード上は"public"と表示される)は
 -- pg_policy.polroles上は空集合({0}という特殊値になり、実在するロールとは
 -- 一致しない)として記録されるため、期待値はARRAY[]::name[]にしている。
+--
+-- policy_cmd_isは(schema, table, policy, command)の4引数と(table, policy,
+-- command, description)の4引数という、引数の型が曖昧になる2つのオーバー
+-- ロードを持つ。説明文を省略するとPostgreSQLが後者と誤認識し、常にhave:NULL
+-- になる不具合が実際にCIで発生した。5引数(説明文を明示)にすることで一意に
+-- 解決させる。
 -- =====================================================================
 
 -- profiles: SELECT(誰でも閲覧可)・INSERT(本人のみ、フィクスチャ新規作成は
@@ -256,9 +262,9 @@ select policies_are(
   ARRAY['Profiles are viewable by everyone.', 'Users can insert their own profile.', 'Users can update own profile.'],
   'profilesのポリシーが3件(閲覧・追加・更新)から増減していない'
 );
-select policy_cmd_is('public', 'profiles', 'Profiles are viewable by everyone.', 'SELECT');
+select policy_cmd_is('public', 'profiles', 'Profiles are viewable by everyone.', 'SELECT', 'Profiles are viewable by everyone.はSELECTに適用される');
 select policy_roles_are('public', 'profiles', 'Profiles are viewable by everyone.', ARRAY[]::name[]);
-select policy_cmd_is('public', 'profiles', 'Users can insert their own profile.', 'INSERT');
+select policy_cmd_is('public', 'profiles', 'Users can insert their own profile.', 'INSERT', 'Users can insert their own profile.はINSERTに適用される');
 select policy_roles_are('public', 'profiles', 'Users can insert their own profile.', ARRAY['authenticated']);
 
 -- chat_rooms: INSERT/UPDATE(新規フィクスチャが必要なため軽いチェックに留める)
@@ -267,9 +273,9 @@ select policies_are(
   ARRAY['Users can view their own chat rooms', 'Users can insert their own chat rooms', 'Users can update their own chat rooms'],
   'chat_roomsのポリシーが3件(閲覧・追加・更新)から増減していない'
 );
-select policy_cmd_is('public', 'chat_rooms', 'Users can insert their own chat rooms', 'INSERT');
+select policy_cmd_is('public', 'chat_rooms', 'Users can insert their own chat rooms', 'INSERT', 'Users can insert their own chat roomsはINSERTに適用される');
 select policy_roles_are('public', 'chat_rooms', 'Users can insert their own chat rooms', ARRAY[]::name[]);
-select policy_cmd_is('public', 'chat_rooms', 'Users can update their own chat rooms', 'UPDATE');
+select policy_cmd_is('public', 'chat_rooms', 'Users can update their own chat rooms', 'UPDATE', 'Users can update their own chat roomsはUPDATEに適用される');
 select policy_roles_are('public', 'chat_rooms', 'Users can update their own chat rooms', ARRAY[]::name[]);
 
 -- chat_messages: INSERT(新規フィクスチャが必要)・UPDATE(条件式が未確認のため
@@ -279,9 +285,9 @@ select policies_are(
   ARRAY['Users can view messages in their rooms', 'Users can insert messages in their rooms', 'Allow users to update messages in their rooms)'],
   'chat_messagesのポリシーが3件(閲覧・追加・更新)から増減していない'
 );
-select policy_cmd_is('public', 'chat_messages', 'Users can insert messages in their rooms', 'INSERT');
+select policy_cmd_is('public', 'chat_messages', 'Users can insert messages in their rooms', 'INSERT', 'Users can insert messages in their roomsはINSERTに適用される');
 select policy_roles_are('public', 'chat_messages', 'Users can insert messages in their rooms', ARRAY[]::name[]);
-select policy_cmd_is('public', 'chat_messages', 'Allow users to update messages in their rooms)', 'UPDATE');
+select policy_cmd_is('public', 'chat_messages', 'Allow users to update messages in their rooms)', 'UPDATE', 'Allow users to update messages in their rooms)はUPDATEに適用される');
 select policy_roles_are('public', 'chat_messages', 'Allow users to update messages in their rooms)', ARRAY['authenticated']);
 
 -- reports: 誰でも閲覧・追加、本人のみ削除
