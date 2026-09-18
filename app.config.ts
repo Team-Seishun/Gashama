@@ -14,7 +14,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: 'com.team-seishun.gashapon-app',
   },
   android: {
-    package: 'com.team_seishun.gashapon_app',
+    package: 'com.teamseishun.gashaponapp',
+    versionCode: 1,
     adaptiveIcon: {
       backgroundColor: '#E6F4FE',
       foregroundImage: './assets/images/android-icon-foreground.png',
