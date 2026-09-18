@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
+import { HIDDEN_COMMAND_STORE_ID } from '@/constants/hidden-command';
 
 export type SearchMasterMode = 'all' | 'store' | 'gachapon' | 'item';
 
@@ -65,7 +66,8 @@ export default function SearchMasterView({ mode, onSelect, onClose, placeholder,
       const promises: PromiseLike<any>[] = [];
 
       if (fetchStore) {
-        let query = supabase.from('stores').select('*');
+        // 技育博デモ用の隠しコマンド専用ダミー店舗は、一般ユーザー向け検索には表示しない
+        let query = supabase.from('stores').select('*').neq('id', HIDDEN_COMMAND_STORE_ID);
         keywords.forEach(kw => {
           query = query.ilike('name', `%${kw}%`);
         });
