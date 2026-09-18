@@ -24,6 +24,15 @@
 -- set local request.jwt.claims to '{"sub":"<uuid>","role":"authenticated"}';
 -- で対象ユーザーとしてログインした状態を再現し、reset role; で元(postgres/
 -- superuser)に戻す。
+--
+-- 前提(このファイル全体、特に「深く検証」パートが依存している最も重要な仮定):
+-- auth.uid()が
+--   select nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid
+-- という、Supabase/GoTrueで広く使われる標準的な実装になっていること。
+-- authスキーマの関数本体はマイグレーションに現れず、このプロジェクト固有の
+-- 実装を直接確認する手段がなかったため、実行するまで検証できていない。
+-- もしこの前提が違う場合、「深く検証」パートの9アサーションが横並びで
+-- 失敗する(セキュリティホールを見逃す方向ではなく、明確に落ちる形になる)。
 begin;
 select plan(35);
 
@@ -77,14 +86,26 @@ from room, msg, ledger, profile_pair;
 
 -- フィクスチャが取得できなかった場合(本番データが空等)は、原因が分かるよう
 -- 明示的に失敗させる(振る舞いベースのテストが無意味にスキップされて
--- 見かけ上パスするのを防ぐ)。
+-- 見かけ上パスするのを防ぐ)。あわせて、フィクスチャ不足時は後続の8件が
+-- 横並びで連鎖的に失敗して読みにくくなるのを避けるため、\gset/\ifで
+-- フィクスチャが揃わない場合は後続をskip()する。
+-- \ifが認識できるよう、boolean型のデフォルト表記(t/f)ではなく
+-- 'true'/'false'という文字列で明示的に返す。
+select (
+  case when (
+    select room_id is not null and message_room_id is not null and ledger_user is not null
+       and profile_a is not null and room_stranger is not null and ledger_stranger is not null
+       and profile_b is not null
+    from pgtap_rls_fixture
+  ) then 'true' else 'false' end
+) as fixture_ready \gset
+
 select ok(
-  (select room_id is not null and message_room_id is not null and ledger_user is not null
-     and profile_a is not null and room_stranger is not null and ledger_stranger is not null
-     and profile_b is not null
-   from pgtap_rls_fixture),
+  :'fixture_ready'::boolean,
   'RLS検証に使う実データ(chat_rooms/chat_messages/points_ledger/profilesの既存行)が揃っている'
 );
+
+\if :fixture_ready
 
 -- =====================================================================
 -- 深く検証: profiles (本人だけ更新できる)
@@ -207,6 +228,10 @@ select ok(
 );
 
 reset role;
+
+\else
+select skip('RLS検証に使う実データが揃っていないため深い検証をスキップ', 8);
+\endif
 
 -- =====================================================================
 -- 軽くチェック: ポリシーの存在・対象ロール・コマンド種別のみ確認する。
