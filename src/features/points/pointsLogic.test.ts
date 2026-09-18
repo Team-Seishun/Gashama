@@ -11,6 +11,12 @@ import {
   resolvePointsBalance,
 } from './pointsLogic';
 
+describe('POINTS_PER_TRADE_LIMIT', () => {
+  it('RPC側と同じ20ポイントを上限とする', () => {
+    expect(POINTS_PER_TRADE_LIMIT).toBe(20);
+  });
+});
+
 describe('isPointsUnavailable', () => {
   it('残高が未取得(null)のときはtrue', () => {
     expect(isPointsUnavailable(null)).toBe(true);
@@ -39,6 +45,10 @@ describe('isSubmitBlockedByPoints', () => {
     expect(isSubmitBlockedByPoints(null, true)).toBe(false);
   });
 
+  it('未ログインの場合は残高が0でもブロックしない(handleSubmit側の認証エラーに委ねる)', () => {
+    expect(isSubmitBlockedByPoints(0, true)).toBe(false);
+  });
+
   it('残高が1以上ならログイン状態に関わらずブロックしない', () => {
     expect(isSubmitBlockedByPoints(5, false)).toBe(false);
     expect(isSubmitBlockedByPoints(5, true)).toBe(false);
@@ -51,16 +61,22 @@ describe('computeMaxPointsUsed', () => {
   });
 
   it('残高が上限未満のときは残高そのもの', () => {
+    expect(computeMaxPointsUsed(0)).toBe(0);
     expect(computeMaxPointsUsed(5)).toBe(5);
   });
 
   it('残高が上限以上のときは上限値(20)でクランプされる', () => {
+    expect(computeMaxPointsUsed(POINTS_PER_TRADE_LIMIT)).toBe(POINTS_PER_TRADE_LIMIT);
     expect(computeMaxPointsUsed(21)).toBe(POINTS_PER_TRADE_LIMIT);
     expect(computeMaxPointsUsed(1000)).toBe(20);
   });
 
   it('上限値を明示的に渡せる', () => {
     expect(computeMaxPointsUsed(30, 10)).toBe(10);
+  });
+
+  it('明示的な上限より残高が少ないときは残高を返す', () => {
+    expect(computeMaxPointsUsed(9, 10)).toBe(9);
   });
 });
 
@@ -72,6 +88,7 @@ describe('isStepperDecrementDisabled', () => {
 
   it('pointsUsedが1のときは無効化(下限)', () => {
     expect(isStepperDecrementDisabled(10, 1)).toBe(true);
+    expect(isStepperDecrementDisabled(10, 0)).toBe(true);
   });
 
   it('pointsUsedが2以上のときは有効', () => {
@@ -87,6 +104,7 @@ describe('isStepperIncrementDisabled', () => {
 
   it('pointsUsedがmaxPointsUsedに達しているときは無効化(上限)', () => {
     expect(isStepperIncrementDisabled(5, 5, 5)).toBe(true);
+    expect(isStepperIncrementDisabled(5, 6, 5)).toBe(true);
   });
 
   it('pointsUsedがmaxPointsUsed未満のときは有効', () => {
@@ -95,8 +113,10 @@ describe('isStepperIncrementDisabled', () => {
 });
 
 describe('decrementPointsUsed', () => {
-  it('1未満には下がらない', () => {
+  it('下限以下の値からでも1未満には下がらない', () => {
     expect(decrementPointsUsed(1)).toBe(1);
+    expect(decrementPointsUsed(0)).toBe(1);
+    expect(decrementPointsUsed(-5)).toBe(1);
   });
 
   it('通常は1減る', () => {
@@ -105,8 +125,9 @@ describe('decrementPointsUsed', () => {
 });
 
 describe('incrementPointsUsed', () => {
-  it('maxPointsUsedを超えない', () => {
+  it('上限以上の値からでもmaxPointsUsedを超えない', () => {
     expect(incrementPointsUsed(20, 20)).toBe(20);
+    expect(incrementPointsUsed(21, 20)).toBe(20);
   });
 
   it('通常は1増える', () => {
