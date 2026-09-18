@@ -6,6 +6,7 @@ import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from '
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ReportDetailModal from '@/components/ReportDetailModal';
 
 const { width, height } = Dimensions.get('window');
@@ -25,6 +26,7 @@ type LocationData = {
 
 export default function MapScreen() {
   const now = Date.now();
+  const insets = useSafeAreaInsets();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [selectedImageReport, setSelectedImageReport] = useState<any | null>(null);
@@ -344,7 +346,7 @@ export default function MapScreen() {
 
       {/* フローティング検索バー */}
       <TouchableOpacity
-        style={styles.searchContainer}
+        style={[styles.searchContainer, { top: insets.top + 10 }]}
         activeOpacity={0.8}
         onPress={() => router.push('/search')}
       >
@@ -356,7 +358,10 @@ export default function MapScreen() {
 
       {/* 現在地に戻るボタン */}
       {!selectedLocation && (
-        <TouchableOpacity style={styles.myLocationButton} onPress={goToMyLocation}>
+        <TouchableOpacity
+          style={[styles.myLocationButton, { bottom: insets.bottom + 150 }]}
+          onPress={goToMyLocation}
+        >
           <Ionicons name="navigate" size={24} color="#007AFF" />
         </TouchableOpacity>
       )}
@@ -570,7 +575,6 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     position: 'absolute',
-    top: 50,
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -601,7 +605,6 @@ const styles = StyleSheet.create({
   },
   myLocationButton: {
     position: 'absolute',
-    bottom: 150, // タブバー等に隠れないように少し高めに設定
     right: 20,
     width: 50,
     height: 50,
