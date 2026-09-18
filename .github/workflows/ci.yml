@@ -25,5 +25,36 @@ jobs:
       - name: Lint（コード整形チェック）の実行
         run: npm run lint
 
-      #- name: テストの実行
-      #  run: npm run test
+      - name: テストの実行
+        run: npm run test
+
+  pgtap:
+    name: pgTAPテスト（SQLマイグレーション）
+    runs-on: ubuntu-latest
+    # 複数PRのCIが同時にリンク済みのリモートDBへ接続すると行ロックが競合し
+    # 得るため、pgTAPテストは常に1件ずつ順番に実行する(#65で決定)。
+    concurrency:
+      group: pgtap-supabase-db
+      cancel-in-progress: false
+
+    steps:
+      - name: リポジトリのコードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Supabase CLIのセットアップ
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: pgTAPテストの実行
+        # supabase/migrations/には差分マイグレーションしかなく、profiles/trades等の
+        # 土台となるテーブル自体を作るCREATE TABLE文が存在しないため、真っさらな
+        # ローカル/CI用DBを一から構築する方式(--local/--linked)ではテストが実行
+        # できない(#61/#65で確定)。そのため、リンク済みのリモートプロジェクトに
+        # 対して、IPv4対応のコネクションプーラー経由(--db-url)で直接実行する。
+        # --linked(内部的にIPv6専用の直接接続ホストを使う)は、GitHub Actionsの
+        # ホスト型ランナーがIPv6の発信接続に対応していないため使えない。
+        # テストは全てBEGIN/ROLLBACKで囲まれており、実データへの副作用はない。
+        run: supabase test db --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
