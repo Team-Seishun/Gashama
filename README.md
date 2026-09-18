@@ -82,9 +82,9 @@ npx expo start
 - **配置場所・命名規則**: `supabase/tests/<名前>_test.sql`（`supabase test new <名前>`で生成、命名規則はCLIの規約）
 - **実行順序**: ファイル名のアルファベット順に実行されるため、pgTAP拡張自体を有効化するセットアップは`000-`始まりのファイル名にして必ず最初に実行させる（`supabase/tests/000-setup-tests-hooks_test.sql`）
 - **新しいテストファイルの作成**: `supabase test new <名前>`
-- **ローカルでの実行**: `supabase start && supabase test db --local`（ローカルDocker上にPostgresコンテナを起動して実行するため、Dockerの導入が前提）
+- **実行対象**: リンク済みのリモートプロジェクト（`supabase test db --linked`）。`supabase/migrations/`には差分マイグレーションしかなく、`profiles`/`trades`等の土台となるテーブル自体を作る`CREATE TABLE`文が存在しないため、真っさらなローカル/CI用DBを一から構築する方式（`--local`）ではテストが実行できない。テストは全てBEGIN/ROLLBACKで囲み、実データへの副作用がないようにする。
 
-> **現状の制約**: 開発機にDockerが未導入のため、ローカルでの実行確認は未検証。CI（GitHub Actions）での自動実行は別issueで整備予定。
+> **現状の制約**: CIへの組み込み（GitHub Secretsでの接続情報管理を含む）は別issueで整備予定。
 
 ---
 
