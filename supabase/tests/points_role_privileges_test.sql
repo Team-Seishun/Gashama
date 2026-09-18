@@ -1,5 +1,5 @@
--- anon/authenticatedロールが、profiles.points/trades.points_usedを
--- INSERT/UPDATEできないことを検証する。
+-- anon/authenticatedロールの列権限(profiles.points/trades.points_used等)・
+-- RPCのEXECUTE権限(apply_trade_request等)が意図通りかを検証する。
 --
 -- 背景: PR #35で「列レベルでREVOKEしたつもりが、テーブルレベルの権限が
 -- 優先されて実は無効だった」という不備が見つかった。has_column_privilege
