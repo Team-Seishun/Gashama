@@ -75,6 +75,19 @@ npx expo start
 
 ---
 
+## 🧪 SQLマイグレーションのテスト (pgTAP)
+
+`supabase/migrations/`のテーブル定義・制約・RLSポリシー・権限設定は、[pgTAP](https://pgtap.org/)（PostgreSQL用のテスト拡張機能）でテストする。Supabase CLIに標準搭載されているツールで、追加インストールは不要。
+
+- **配置場所・命名規則**: `supabase/tests/<名前>_test.sql`（`supabase test new <名前>`で生成、命名規則はCLIの規約）
+- **実行順序**: ファイル名のアルファベット順に実行されるため、pgTAP拡張自体を有効化するセットアップは`000-`始まりのファイル名にして必ず最初に実行させる（`supabase/tests/000-setup-tests-hooks_test.sql`）
+- **新しいテストファイルの作成**: `supabase test new <名前>`
+- **ローカルでの実行**: `supabase start && supabase test db --local`（ローカルDocker上にPostgresコンテナを起動して実行するため、Dockerの導入が前提）
+
+> **現状の制約**: 開発機にDockerが未導入のため、ローカルでの実行確認は未検証。CI（GitHub Actions）での自動実行は別issueで整備予定。
+
+---
+
 ## 📖 使用方法
 
 1. **マップ画面 (`/`)**:
