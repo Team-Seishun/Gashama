@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import ReportDetailModal from '@/components/ReportDetailModal';
+import { HIDDEN_COMMAND_STORE_ID } from '@/constants/hidden-command';
 
 const { width, height } = Dimensions.get('window');
 
@@ -143,10 +144,16 @@ export default function MapScreen() {
         return;
       }
 
-      Alert.alert(
-        '隠しコマンド発動！',
-        `技育博専用ボーナスで+${pointsAwarded}pt獲得しました！\n対象ガチャポンの在庫投稿を一括で完了しました。`
-      );
+      // 1日1回まで（JST暦日）。既に発動済みの場合はRPCが0を返し、
+      // reports/profilesは変更されていない。
+      if (typeof pointsAwarded === 'number' && pointsAwarded > 0) {
+        Alert.alert(
+          '隠しコマンド発動！',
+          `技育博専用ボーナスで+${pointsAwarded}pt獲得しました！\n対象ガチャポンの在庫投稿を一括で完了しました。`
+        );
+      } else {
+        Alert.alert('隠しコマンド', '本日は技育博専用ボーナスを発動済みです。また明日お試しください。');
+      }
     } catch (error: any) {
       console.error('隠しコマンド発動エラー:', error);
       Alert.alert('隠しコマンド', error.message || '発動に失敗しました。');
@@ -268,7 +275,8 @@ export default function MapScreen() {
 
   useEffect(() => {
     const fetchStores = async () => {
-      const { data } = await supabase.from('stores').select('*');
+      // 技育博デモ用の隠しコマンド専用ダミー店舗は、一般ユーザー向けマップには表示しない
+      const { data } = await supabase.from('stores').select('*').neq('id', HIDDEN_COMMAND_STORE_ID);
       if (data) {
         const locations = data.map((store: any) => {
           let lat = 0;
