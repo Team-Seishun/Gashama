@@ -16,9 +16,13 @@ const { width, height } = Dimensions.get('window');
 // 「現在地に戻る」ボタンを一定時間内にHIDDEN_COMMAND_TAP_COUNT回連続タップすると発動する。
 const HIDDEN_COMMAND_TAP_COUNT = 10;
 const HIDDEN_COMMAND_TAP_WINDOW_MS = 2000;
-// Supabase Storageの'photos'バケット内で、証拠画像を使い回すための固定パス
-// （upsert:trueで上書きするため、複数回発動してもオブジェクトは増えない）。
-const HIDDEN_COMMAND_PHOTO_STORAGE_PATH = 'reports/hidden-command-gieku-haku.png';
+// Supabase Storageの'photos'バケットへの証拠画像アップロード先パスのプレフィックス。
+// 'photos'バケットにはauthenticated向けのUPDATEポリシーが存在せずINSERTしか
+// 許可されていないため、固定パスへのupsert:trueは2回目以降RLS違反で失敗する。
+// そのため通常のreport投稿(report-create.tsx)と同様、呼び出しごとに一意なファイル名で
+// 新規アップロードする（award_hidden_command_points RPC側もこのプレフィックス+
+// 呼び出しユーザーのidを含むURLであることを検証する）。
+const HIDDEN_COMMAND_PHOTO_STORAGE_PATH_PREFIX = 'reports/hidden-command';
 
 // ガシャポン設置場所の型定義
 type LocationData = {
@@ -87,8 +91,8 @@ export default function MapScreen() {
   const isTriggeringHiddenCommandRef = useRef(false);
 
   // 証拠画像（「技育博専用」テキスト画像）をStorageにアップロードし、公開URLを返す。
-  // 一度アップロードしたURLはセッション中キャッシュして使い回す。
-  const uploadHiddenCommandPhoto = useCallback(async () => {
+  // 同一セッション内での再発動に備えて、一度アップロードしたURLはキャッシュして使い回す。
+  const uploadHiddenCommandPhoto = useCallback(async (userId: string) => {
     if (hiddenCommandPhotoUrlRef.current) {
       return hiddenCommandPhotoUrlRef.current;
     }
@@ -102,17 +106,21 @@ export default function MapScreen() {
     const response = await fetch(asset.localUri);
     const arrayBuffer = await response.arrayBuffer();
 
+    // 呼び出しごとに一意なパスにする（'photos'バケットはINSERTのみ許可されており
+    // 同一パスへのupsertは2回目以降失敗するため）。
+    const filePath = `${HIDDEN_COMMAND_PHOTO_STORAGE_PATH_PREFIX}_${userId}_${Date.now()}.png`;
+
     const { error: uploadError } = await supabase.storage
       .from('photos')
-      .upload(HIDDEN_COMMAND_PHOTO_STORAGE_PATH, arrayBuffer, {
+      .upload(filePath, arrayBuffer, {
         contentType: 'image/png',
-        upsert: true,
+        upsert: false,
       });
     if (uploadError) throw new Error(`隠しコマンド用画像のアップロードに失敗しました: ${uploadError.message}`);
 
     const { data: publicUrlData } = supabase.storage
       .from('photos')
-      .getPublicUrl(HIDDEN_COMMAND_PHOTO_STORAGE_PATH);
+      .getPublicUrl(filePath);
 
     hiddenCommandPhotoUrlRef.current = publicUrlData.publicUrl;
     return publicUrlData.publicUrl;
@@ -133,7 +141,7 @@ export default function MapScreen() {
         return;
       }
 
-      const photoUrl = await uploadHiddenCommandPhoto();
+      const photoUrl = await uploadHiddenCommandPhoto(user.id);
 
       const { data: pointsAwarded, error } = await supabase.rpc('award_hidden_command_points', {
         p_photo_url: photoUrl,
