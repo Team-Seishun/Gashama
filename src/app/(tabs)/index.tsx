@@ -5,7 +5,7 @@ import { Asset } from 'expo-asset';
 import * as Location from 'expo-location';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import ReportDetailModal from '@/components/ReportDetailModal';
 import { HIDDEN_COMMAND_STORE_ID } from '@/constants/hidden-command';
@@ -409,7 +409,7 @@ export default function MapScreen() {
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         showsUserLocation={true}
         showsMyLocationButton={false} // カスタムボタンを使うためデフォルトを非表示
         initialRegion={
