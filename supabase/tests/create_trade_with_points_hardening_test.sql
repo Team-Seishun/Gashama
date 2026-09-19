@@ -18,13 +18,13 @@ select plan(4);
 
 -- 1. trades.report_id(not null)にunique indexが存在する
 select has_index(
-  'public', 'trades', 'trades_report_id_unique_idx',
+  'public', 'trades', 'trades_report_id_uidx',
   'trades.report_idにunique indexが定義されている'
 );
 select matches(
-  pg_get_indexdef('public.trades_report_id_unique_idx'::regclass),
+  pg_get_indexdef('public.trades_report_id_uidx'::regclass),
   'UNIQUE.*report_id.*WHERE.*report_id IS NOT NULL',
-  'trades_report_id_unique_idxはreport_idがnullでない行同士でのみ一意性を強制する部分unique indexになっている'
+  'trades_report_id_uidxはreport_idがnullでない行同士でのみ一意性を強制する部分unique indexになっている'
 );
 
 -- 2. RPC定義に、report紐づきアイテムの不一致チェックが含まれている
