@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl, Image } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
+import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
 import { InventoryCard, ReportItem, unwrapRelation } from '@/components/InventoryCard';
 import TradeList from '@/components/TradeList';
@@ -435,6 +436,9 @@ export default function PostScreen() {
                         <Image
                           source={{ uri: inv.photo_url || 'https://via.placeholder.com/200' }}
                           style={styles.createSheetInventoryImage}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          recyclingKey={inv.photo_url || inv.id}
                         />
                         <Text style={styles.createSheetInventoryName}>
                           {gachaponItem?.name || '不明なアイテム'}
