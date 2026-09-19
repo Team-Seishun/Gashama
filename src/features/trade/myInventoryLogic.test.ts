@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { filterUntradedInventories } from './myInventoryLogic';
+import { filterTradeableInventories, filterUntradedInventories } from './myInventoryLogic';
 
 describe('filterUntradedInventories', () => {
   it('tradedReportIdsが空なら全件そのまま返す', () => {
@@ -41,5 +41,39 @@ describe('filterUntradedInventories', () => {
     const original = [...inventories];
     filterUntradedInventories(inventories, ['a']);
     expect(inventories).toEqual(original);
+  });
+});
+
+describe('filterTradeableInventories', () => {
+  it('未トレード化かつitem_idがある在庫のみを返す', () => {
+    const inventories = [
+      { id: 'a', item_id: 'item-1' },
+      { id: 'b', item_id: null },
+      { id: 'c', item_id: 'item-2' },
+    ];
+    expect(filterTradeableInventories(inventories, [])).toEqual([
+      { id: 'a', item_id: 'item-1' },
+      { id: 'c', item_id: 'item-2' },
+    ]);
+  });
+
+  it('item_idがあってもトレード募集済み(tradedReportIdsに含まれる)なら除外する', () => {
+    const inventories = [
+      { id: 'a', item_id: 'item-1' },
+      { id: 'b', item_id: 'item-2' },
+    ];
+    expect(filterTradeableInventories(inventories, ['a'])).toEqual([
+      { id: 'b', item_id: 'item-2' },
+    ]);
+  });
+
+  it('item_idがnullの在庫は未トレード化でも除外する', () => {
+    const inventories = [{ id: 'a', item_id: null }];
+    expect(filterTradeableInventories(inventories, [])).toEqual([]);
+  });
+
+  it('該当する在庫が無ければ空配列を返す', () => {
+    const inventories = [{ id: 'a', item_id: null }, { id: 'b', item_id: 'item-1' }];
+    expect(filterTradeableInventories(inventories, ['b'])).toEqual([]);
   });
 });

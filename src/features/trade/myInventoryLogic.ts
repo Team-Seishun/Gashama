@@ -18,3 +18,22 @@ export function filterUntradedInventories<T extends InventoryLike>(
   const tradedIds = new Set(tradedReportIds);
   return inventories.filter((inv) => !tradedIds.has(inv.id));
 }
+
+export type SelectableInventory = InventoryLike & { item_id: string | null };
+
+// Post画面の「+」ボタンから新規トレード募集を作るための在庫一覧に絞り込む。
+// 未トレード化であることに加え、item_id(具体的なアイテム)が選択されている
+// 在庫だけを対象にする。report-create.tsxでは通常の在庫投稿時はアイテム選択が
+// 任意(item_id: selectedItem?.id ?? null)なため、item_idがnullの在庫を許可すると
+// trade-create.tsx側でhaveItemIdが渡らず「譲るアイテム」が自由選択になってしまい、
+// 写真で証明した内容と無関係なアイテムをトレードに出せてしまう
+// （既存のreport-create.tsx経由のトレード作成フローでは、isCreatingTrade時に
+// アイテム選択が必須化されており、この不変条件が常に保たれていた）。
+export function filterTradeableInventories<T extends SelectableInventory>(
+  inventories: T[],
+  tradedReportIds: Iterable<string>
+): T[] {
+  return filterUntradedInventories(inventories, tradedReportIds).filter(
+    (inv) => inv.item_id !== null
+  );
+}

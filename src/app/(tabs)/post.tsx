@@ -13,7 +13,7 @@ import ReportDetailModal from '@/components/ReportDetailModal';
 import { commonStyles } from '@/styles/common';
 import { useRequestGuard } from '@/hooks/useRequestGuard';
 import { fetchMyInventories, fetchMyTradedReportIds } from '@/features/trade/api';
-import { filterUntradedInventories } from '@/features/trade/myInventoryLogic';
+import { filterTradeableInventories } from '@/features/trade/myInventoryLogic';
 
 // reports(*) には gachapon_id / store_id / item_id が生のFKカラムとして
 // 含まれる（gachapon_items(id, name)はアイテム名表示用に別途joinしたもの）。
@@ -72,9 +72,21 @@ export default function PostScreen() {
   const [myUntradedInventories, setMyUntradedInventories] = useState<MyInventoryItem[]>([]);
   const [loadingMyInventories, setLoadingMyInventories] = useState(false);
   const [myInventoriesError, setMyInventoriesError] = useState<string | null>(null);
+  // handleSelectTradePostの連打・素早い戻る→再選択で古いレスポンスが新しい状態を
+  // 上書きしないようにするためのガード（inventoryRequestGuardと同じ仕組み）
+  const myInventoriesRequestGuard = useRequestGuard();
+
+  // シートを「選択」画面に戻す（トレード用在庫の取得中/取得結果もリセットする）
+  const resetCreateSheetToChoose = () => {
+    setCreateSheetMode('choose');
+    setLoadingMyInventories(false);
+    setMyInventoriesError(null);
+    setMyUntradedInventories([]);
+    myInventoriesRequestGuard.invalidate();
+  };
 
   const openCreateSheet = () => {
-    setCreateSheetMode('choose');
+    resetCreateSheetToChoose();
     createSheetRef.current?.snapToIndex(0);
   };
 
@@ -84,14 +96,20 @@ export default function PostScreen() {
   };
 
   const handleSelectTradePost = async () => {
+    const myRequestId = myInventoriesRequestGuard.start();
     setCreateSheetMode('inventory');
     createSheetRef.current?.snapToIndex(1);
     setLoadingMyInventories(true);
     setMyInventoriesError(null);
     setMyUntradedInventories([]);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // 読み取り専用の一覧取得なので、ネットワーク往復を伴うgetUser()ではなく
+      // ローカルセッションを読むだけのgetSession()を使う
+      // （trade-create.tsxの表示専用処理と同じ方針）
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
+        if (myInventoriesRequestGuard.isStale(myRequestId)) return;
         setMyInventoriesError('ログインしていないため在庫を取得できませんでした。');
         return;
       }
@@ -99,27 +117,32 @@ export default function PostScreen() {
       const [{ data: inventories, error: invError }, { data: tradedReportIds, error: tradedError }] =
         await Promise.all([fetchMyInventories(user.id), fetchMyTradedReportIds(user.id)]);
 
+      if (myInventoriesRequestGuard.isStale(myRequestId)) return;
+
       if (invError || tradedError) {
         console.error('自分の在庫取得エラー:', invError || tradedError);
         setMyInventoriesError('在庫の取得に失敗しました。もう一度お試しください。');
         return;
       }
 
-      const untraded = filterUntradedInventories(
+      const tradeable = filterTradeableInventories(
         (inventories ?? []) as unknown as MyInventoryItem[],
         tradedReportIds ?? []
       );
-      setMyUntradedInventories(untraded);
+      setMyUntradedInventories(tradeable);
     } catch (e) {
+      if (myInventoriesRequestGuard.isStale(myRequestId)) return;
       console.error('自分の在庫取得エラー:', e);
       setMyInventoriesError('在庫の取得に失敗しました。もう一度お試しください。');
     } finally {
-      setLoadingMyInventories(false);
+      if (!myInventoriesRequestGuard.isStale(myRequestId)) {
+        setLoadingMyInventories(false);
+      }
     }
   };
 
   const handleBackToChoose = () => {
-    setCreateSheetMode('choose');
+    resetCreateSheetToChoose();
     createSheetRef.current?.snapToIndex(0);
   };
 
@@ -349,8 +372,9 @@ export default function PostScreen() {
           ref={createSheetRef}
           index={-1}
           snapPoints={createSheetSnapPoints}
+          enableDynamicSizing={false}
           enablePanDownToClose={true}
-          onClose={() => setCreateSheetMode('choose')}
+          onClose={resetCreateSheetToChoose}
           backgroundStyle={styles.createSheetBackground}
           handleIndicatorStyle={styles.createSheetHandleIndicator}
         >
@@ -408,7 +432,10 @@ export default function PostScreen() {
                         style={styles.createSheetInventoryItem}
                         onPress={() => handlePickInventoryForTrade(inv)}
                       >
-                        <Image source={{ uri: inv.photo_url }} style={styles.createSheetInventoryImage} />
+                        <Image
+                          source={{ uri: inv.photo_url || 'https://via.placeholder.com/200' }}
+                          style={styles.createSheetInventoryImage}
+                        />
                         <Text style={styles.createSheetInventoryName}>
                           {gachaponItem?.name || '不明なアイテム'}
                         </Text>
