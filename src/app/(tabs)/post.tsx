@@ -115,7 +115,7 @@ export default function PostScreen() {
         return;
       }
 
-      const [{ data: inventories, error: invError }, { data: tradedReportIds, error: tradedError }] =
+      const [{ data: myInventories, error: invError }, { data: tradedReportIds, error: tradedError }] =
         await Promise.all([fetchMyInventories(user.id), fetchMyTradedReportIds(user.id)]);
 
       if (myInventoriesRequestGuard.isStale(myRequestId)) return;
@@ -127,7 +127,7 @@ export default function PostScreen() {
       }
 
       const tradeable = filterTradeableInventories(
-        (inventories ?? []) as unknown as MyInventoryItem[],
+        (myInventories ?? []) as unknown as MyInventoryItem[],
         tradedReportIds ?? []
       );
       setMyUntradedInventories(tradeable);
@@ -140,11 +140,6 @@ export default function PostScreen() {
         setLoadingMyInventories(false);
       }
     }
-  };
-
-  const handleBackToChoose = () => {
-    resetCreateSheetToChoose();
-    createSheetRef.current?.snapToIndex(0);
   };
 
   const handlePickInventoryForTrade = (item: MyInventoryItem) => {
@@ -409,7 +404,7 @@ export default function PostScreen() {
             ) : (
               <View>
                 <View style={styles.createSheetInventoryHeader}>
-                  <TouchableOpacity onPress={handleBackToChoose} accessibilityRole="button" accessibilityLabel="戻る">
+                  <TouchableOpacity onPress={openCreateSheet} accessibilityRole="button" accessibilityLabel="戻る">
                     <Ionicons name="chevron-back" size={22} color="#333" />
                   </TouchableOpacity>
                   <Text style={styles.createSheetTitle}>トレードに出す在庫を選択</Text>

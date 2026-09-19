@@ -14,6 +14,36 @@
 --    `for update` ロックで防いでいるが、今回はRPC経由の呼び出しだけでなく
 --    tradesへの直接INSERTが将来発生した場合にもデータ不整合を防ぎたいため、
 --    RPC内のロックではなくDBのunique制約そのものを採用する。
+--
+--    create_trade_with_points自体は本マイグレーションの9日前（20260911000000）から
+--    unique制約無しで稼働しており、既にreport_idが重複するtrades行が実データに
+--    存在する可能性を否定できない。存在する場合、この後のCREATE UNIQUE INDEXは
+--    素の"duplicate key value violates unique constraint"エラーで失敗する。
+--    それ自体はデータを破壊しないが、原因の分かりにくいエラーで migration適用が
+--    止まってしまうのを避けるため、事前に重複の有無を診断し、あれば対象の
+--    report_idを含む分かりやすいメッセージで止める（人がPRの説明文を覚えている
+--    ことに頼らず、マイグレーション自身に診断を持たせる）。
+do $$
+declare
+  v_duplicate_report_ids uuid[];
+begin
+  select array_agg(report_id) into v_duplicate_report_ids
+    from (
+      select report_id
+        from public.trades
+        where report_id is not null
+        group by report_id
+        having count(*) > 1
+    ) dup;
+
+  if v_duplicate_report_ids is not null then
+    raise exception
+      'trades.report_idが重複している行が見つかりました（report_id: %）。trades_report_id_uidx作成前にこれらの重複を解消してください。',
+      v_duplicate_report_ids;
+  end if;
+end;
+$$;
+
 create unique index if not exists trades_report_id_uidx
   on public.trades (report_id)
   where report_id is not null;

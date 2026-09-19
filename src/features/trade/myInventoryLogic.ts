@@ -25,10 +25,17 @@ export type SelectableInventory = InventoryLike & { item_id: string | null };
 // 未トレード化であることに加え、item_id(具体的なアイテム)が選択されている
 // 在庫だけを対象にする。report-create.tsxでは通常の在庫投稿時はアイテム選択が
 // 任意(item_id: selectedItem?.id ?? null)なため、item_idがnullの在庫を許可すると
-// trade-create.tsx側でhaveItemIdが渡らず「譲るアイテム」が自由選択になってしまい、
-// 写真で証明した内容と無関係なアイテムをトレードに出せてしまう
-// （既存のreport-create.tsx経由のトレード作成フローでは、isCreatingTrade時に
-// アイテム選択が必須化されており、この不変条件が常に保たれていた）。
+// trade-create.tsx側でhaveItemIdが渡らず「譲るアイテム」が自由選択できてしまう。
+//
+// 【この関数はUXのための絞り込みであり、正しさの最終的な保証はRPC側にある】
+// 実際の不変条件（reportのitem_idとhave_item_idの一致・報告者本人であること・
+// 既に他のトレードに紐付いていないこと）は、
+// supabase/migrations/20260919000005_harden_create_trade_with_points_rpc.sql の
+// create_trade_with_points RPCがサーバー側で検証しており、そちらが唯一の
+// 信頼できる検証元(source of truth)。ここでの絞り込みは、選べない選択肢を
+// 事前に一覧から除外してユーザー体験を良くするためのものであり、この関数を
+// 緩めてもRPC側の検証により不正なトレードは作成されない
+// （逆に、この関数だけを信頼してRPC側の検証を緩めてはならない）。
 export function filterTradeableInventories<T extends SelectableInventory>(
   inventories: T[],
   tradedReportIds: Iterable<string>
