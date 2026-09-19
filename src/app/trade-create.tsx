@@ -204,7 +204,19 @@ export default function TradeCreateScreen() {
         p_photo_url: photoUrl,
       });
 
-      if (rpcError) throw new Error(`トレード作成失敗: ${rpcError.message}`);
+      if (rpcError) {
+        // create_trade_with_points RPCが返す一部のエラーは、通常のUI操作からでも
+        // 到達しうる（例: 在庫の選択後に他端末で先にトレード化された等）ため、
+        // 生の英語メッセージをそのまま出さずTradeList.tsxの既存パターンに合わせて
+        // 日本語に変換する。
+        if (rpcError.message.includes('report item does not match have item')) {
+          throw new Error('選択した在庫のアイテム情報が変わったため作成できませんでした。もう一度お試しください。');
+        }
+        if (rpcError.message.includes('report is already linked to a trade')) {
+          throw new Error('この在庫は既に他のトレード募集に使われています。');
+        }
+        throw new Error(`トレード作成失敗: ${rpcError.message}`);
+      }
 
       Alert.alert('募集完了', 'トレードの募集を開始しました！', [
         {

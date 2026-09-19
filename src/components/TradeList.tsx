@@ -1,6 +1,7 @@
 import SearchBar from '@/components/SearchBar';
 import { Profile, ReportItem, Store, formatTimeAgo, unwrapRelation } from '@/components/InventoryCard';
 import { getProfileIconSource } from '@/features/profile/profile-icons';
+import { fetchMyInventories as fetchMyInventoriesApi } from '@/features/trade/api';
 import { commonStyles } from '@/styles/common';
 import { useRequestGuard } from '@/hooks/useRequestGuard';
 import { supabase } from '@/utils/supabase';
@@ -127,10 +128,7 @@ export default function TradeList({ reloadKey }: TradeListProps) {
     setMyInventories([]);
     setInventoryError(null);
     try {
-      const { data, error } = await supabase
-        .from('reports')
-        .select('*, gachapon_items(id, name)')
-        .eq('user_id', userId);
+      const { data, error } = await fetchMyInventoriesApi(userId);
 
       if (error) {
         console.error('Error fetching my inventories:', error);
